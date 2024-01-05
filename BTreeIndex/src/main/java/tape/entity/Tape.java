@@ -34,23 +34,6 @@ public class Tape {
     // Dynamic data
 
     /**
-     * On tape there can be 'empty' runs, which is how the algorithm of Fibonacci merge sort simulates that
-     * there are always only a finonacci number of runs on tapes. <strong>Real</strong> runs have the data, while empty don't have any.
-     */
-    private int realRuns;
-
-    /**
-     * On tape there can be 'empty' runs, which is how the algorithm of Fibonacci merge sort simulates that
-     * there are always only a finonacci number of runs on tapes. Real runs have the data, while <strong>empty</strong> don't have any.
-     */
-    private int emptyRuns;
-
-    /**
-     * After first distribution, number of records on each tape is known, so it can be counted and used if we want.
-     */
-    private List<Integer> recordsInEachRun;
-
-    /**
      * Count of <strong>read</strong> operations done on the tape file.
      */
     private int reads;

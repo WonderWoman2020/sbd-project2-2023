@@ -232,60 +232,9 @@ public class RecordService {
         return tapeService.getWrites(id);
     }
 
-    public int getRealRuns(UUID id)
-    {
-        return tapeService.getRealRuns(id);
-    }
-
-    public int getEmptyRuns(UUID id)
-    {
-        return tapeService.getEmptyRuns(id);
-    }
-
-    public int getAllRuns(UUID id)
-    {
-        return tapeService.getAllRuns(id);
-    }
-
-    public List<Integer> getRecordsInEachRun(UUID id)
-    {
-        return tapeService.getRecordsInEachRun(id);
-    }
-
-    /**
-     * Get records number of one specific run
-     * @param id
-     * @param run Index of the run which records count is requested
-     * @return
-     */
-    public int getRecordsInRun(UUID id, int run)
-    {
-        return tapeService.getRecordsInRun(id, run);
-    }
-
-    public int getNextRunRecords(UUID id)
-    {
-        return tapeService.getNextRunRecords(id);
-    }
-
-    public void addNextRun(UUID id, int records)
-    {
-        tapeService.addNextRun(id, records);
-    }
-
-    public void removeNextRun(UUID id)
-    {
-        tapeService.removeNextRun(id);
-    }
-
     public boolean isInputTape(UUID id)
     {
         return tapeService.isInputTape(id);
-    }
-
-    public boolean isTapeEmpty(UUID id)
-    {
-        return tapeService.isEmpty(id);
     }
 
     public boolean isEOF(UUID id)

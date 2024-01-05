@@ -95,9 +95,6 @@ public class TapeService {
                 .isInputTape(false)
                 .reads(0)
                 .writes(0)
-                .realRuns(0)
-                .emptyRuns(0)
-                .recordsInEachRun(new ArrayList<>())
                 .build();
 
         this.tapes.put(tape.getId(), tape);
@@ -114,9 +111,6 @@ public class TapeService {
                 .isInputTape(true)
                 .reads(0)
                 .writes(0)
-                .realRuns(0)
-                .emptyRuns(0)
-                .recordsInEachRun(new ArrayList<>())
                 .build();
 
         this.tapes.put(inputTape.getId(), inputTape);
@@ -335,59 +329,6 @@ public class TapeService {
 
         return tape.getWrites();
     }
-
-    public int getRealRuns(UUID id)
-    {
-        Tape tape = this.tapes.get(id);
-        if(tape == null)
-            throw new NoSuchElementException();
-
-        return tape.getRealRuns();
-    }
-
-    public int getEmptyRuns(UUID id)
-    {
-        Tape tape = this.tapes.get(id);
-        if(tape == null)
-            throw new NoSuchElementException();
-
-        return tape.getEmptyRuns();
-    }
-
-    public int getAllRuns(UUID id)
-    {
-        return this.getRealRuns(id) + this.getEmptyRuns(id);
-    }
-
-    public List<Integer> getRecordsInEachRun(UUID id)
-    {
-        Tape tape = this.tapes.get(id);
-        if(tape == null)
-            throw new NoSuchElementException();
-
-        return tape.getRecordsInEachRun();
-    }
-
-    /**
-     * Get records number of one specific run
-     * @param id
-     * @param run Index of the run which records count is requested
-     * @return
-     */
-    public int getRecordsInRun(UUID id, int run)
-    {
-        Tape tape = this.tapes.get(id);
-        if(tape == null)
-            throw new NoSuchElementException();
-
-        List<Integer> recordsInEachRun = tape.getRecordsInEachRun();
-        return recordsInEachRun.get(run);
-    }
-
-    public int getNextRunRecords(UUID id)
-    {
-        return this.getRecordsInRun(id, 0);
-    }
     public void incReads(UUID id)
     {
         Tape tape = this.tapes.get(id);
@@ -406,75 +347,6 @@ public class TapeService {
         tape.setWrites(tape.getWrites()+1);
     }
 
-    public void addNextRun(UUID id, int records)
-    {
-        Tape tape = this.tapes.get(id);
-        if(tape == null)
-            throw new NoSuchElementException();
-
-        if(tape.isInputTape())
-            throw new IllegalStateException("Cannot add runs to an input tape. This is an input file, so it shouldn't be changed.");
-
-        if(records < 0)
-            throw new IllegalStateException("Records count provided for this new run was below 0." +
-                    " Records number in a run must be a natural number or 0.");
-
-        List<Integer> recordsInEachRun = tape.getRecordsInEachRun();
-        /*if(!recordsInEachRun.isEmpty()) {
-            int previousRunRecords = recordsInEachRun.get(recordsInEachRun.size() - 1);
-            if (previousRunRecords == 0 && records > 0)
-                throw new IllegalStateException("New run contained some records while previous was an empty run." +
-                        " After empty runs, there can't be any more real runs on the tape.");
-        }*/
-        if(this.getEmptyRuns(id) > 0)
-            if(records > 0)
-                throw new IllegalStateException("New run contained some records while there already are some empty runs." +
-                        " After empty runs, there can't be any more real runs on the tape.");
-
-        if(records == 0) {
-            recordsInEachRun.add(0, records);
-            tape.setRecordsInEachRun(recordsInEachRun);
-            tape.setEmptyRuns(tape.getEmptyRuns() + 1);
-        }
-        else {
-            recordsInEachRun.add(records);
-            tape.setRecordsInEachRun(recordsInEachRun);
-            tape.setRealRuns(tape.getRealRuns() + 1);
-        }
-    }
-
-    public void removeNextRun(UUID id)
-    {
-        Tape tape = this.tapes.get(id);
-        if(tape == null)
-            throw new NoSuchElementException();
-
-        if(tape.isInputTape())
-            throw new IllegalStateException("Input tape doesn't know how many runs is on it. The runs can be" +
-                    " counted for the first time in the distribution phase.");
-
-        List<Integer> recordsInEachRun = tape.getRecordsInEachRun();
-        if(recordsInEachRun.isEmpty())
-            throw new NoSuchElementException("No runs to remove were left on the tape.");
-
-        // When reading the tape sequentially, we first read the first runs,
-        // so first run in the list needs to be cleared after reading the run
-        int records = recordsInEachRun.remove(0);
-        tape.setRecordsInEachRun(recordsInEachRun);
-        if(records == 0) {
-            if (tape.getEmptyRuns() == 0)
-                throw new IllegalStateException("Some calculations went wrong." +
-                        " Empty runs counter was 0, while there was an empty run in the list.");
-            tape.setEmptyRuns(tape.getEmptyRuns() - 1);
-        }
-        else {
-            if (tape.getRealRuns() == 0)
-                throw new IllegalStateException("Some calculations went wrong." +
-                        " Real runs counter was 0, while there was a real run in the list.");
-            tape.setRealRuns(tape.getRealRuns() - 1);
-        }
-    }
-
     // Some boolean check methods
 
     public boolean isInputTape(UUID id)
@@ -484,15 +356,6 @@ public class TapeService {
             throw new NoSuchElementException();
 
         return tape.isInputTape();
-    }
-
-    public boolean isEmpty(UUID id)
-    {
-        Tape tape = this.tapes.get(id);
-        if(tape == null)
-            throw new NoSuchElementException();
-
-        return (tape.getRealRuns() + tape.getEmptyRuns() <= 0);
     }
 
     /**
