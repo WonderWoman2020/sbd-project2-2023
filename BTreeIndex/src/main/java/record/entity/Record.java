@@ -11,6 +11,11 @@ import lombok.*;
 public class Record {
 
     /**
+     * Unique 8-byte key (id) of the record entity.
+     */
+    private long key;
+
+    /**
      * Mass of an object in kilograms. Data size: 4 bytes.
      */
     private int mass;
@@ -26,7 +31,7 @@ public class Record {
      */
     public int getSize()
     {
-        return 4*2;
+        return (8 + (4*2));
     }
 
 }

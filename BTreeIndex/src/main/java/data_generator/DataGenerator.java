@@ -23,8 +23,10 @@ public class DataGenerator {
     public Record generateRecord()
     {
         Random rand = new Random();
+        // TODO change to no boundary at the end of the job
         // Temporarily set 100 as a boundary, for simpler math calculations while developing app
         return Record.builder()
+                .key(rand.nextLong())
                 .mass(rand.nextInt(100))
                 .speed(rand.nextInt(100))
                 .build();

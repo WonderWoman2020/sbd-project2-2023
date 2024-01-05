@@ -33,8 +33,9 @@ public class RecordConverter {
         if((data.length - off) < record.getSize())
             return null;
 
-        record.setMass(ByteBuffer.wrap(data, off, 4).getInt());
-        record.setSpeed(ByteBuffer.wrap(data, off + 4, 4).getInt());
+        record.setKey(ByteBuffer.wrap(data, off, 8).getLong());
+        record.setMass(ByteBuffer.wrap(data, off + 8, 4).getInt());
+        record.setSpeed(ByteBuffer.wrap(data, off + 12, 4).getInt());
         return record;
     }
 
@@ -49,8 +50,9 @@ public class RecordConverter {
             return null;
 
         return ByteBuffer.allocate(record.getSize())
-                .putInt(0,record.getMass())
-                .putInt(4, record.getSpeed())
+                .putLong(0, record.getKey())
+                .putInt(8,record.getMass())
+                .putInt(12, record.getSpeed())
                 .array();
     }
 
@@ -71,8 +73,9 @@ public class RecordConverter {
 
         try {
             ByteBuffer.wrap(output, off, record.getSize())
-                    .putInt(off, record.getMass())
-                    .putInt(off + 4, record.getSpeed());
+                    .putLong(off, record.getKey())
+                    .putInt(off + 8, record.getMass())
+                    .putInt(off + 12, record.getSpeed());
         } catch (IndexOutOfBoundsException e)
         {
             e.printStackTrace();
@@ -98,7 +101,7 @@ public class RecordConverter {
         if(record == null)
             return null;
 
-        return record.getMass()+" "+record.getSpeed();
+        return record.getKey()+" "+record.getMass()+" "+record.getSpeed();
     }
 
     public Record stringToRecord(String data)
@@ -107,13 +110,14 @@ public class RecordConverter {
             return null;
 
         String[] recordData = data.split(" ");
-        if(recordData.length < 2)
+        if(recordData.length < 3)
             return null;
 
         try {
             return Record.builder()
-                    .mass(Integer.parseInt(recordData[0]))
-                    .speed(Integer.parseInt(recordData[1]))
+                    .key(Long.parseUnsignedLong(recordData[0]))
+                    .mass(Integer.parseInt(recordData[1]))
+                    .speed(Integer.parseInt(recordData[2]))
                     .build();
         } catch (NumberFormatException e)
         {

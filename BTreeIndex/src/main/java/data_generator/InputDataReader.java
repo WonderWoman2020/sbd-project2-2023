@@ -24,8 +24,8 @@ public class InputDataReader {
                 Record record = recordConverter.stringToRecord(input.readLine());
                 if(record == null)
                 {
-                    System.out.println("Bad record syntax. Write 2 numbers (mass and speed) separated" +
-                            " by space and press enter. Example:\n70 10");
+                    System.out.println("Bad record syntax. Write 3 numbers (key, mass and speed) separated" +
+                            " by space and press enter. Example:\n100 70 10");
                     i--; // User has to repeat writing the record in a correct way for it to be counted in
                     continue;
                 }
