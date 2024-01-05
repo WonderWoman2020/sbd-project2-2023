@@ -474,32 +474,6 @@ public class TapeService {
             tape.setRealRuns(tape.getRealRuns() - 1);
         }
     }
-    /*public void setRealRuns(UUID id, int realRuns)
-    {
-        Tape tape = this.tapes.get(id);
-        if(tape == null)
-            throw new NoSuchElementException();
-
-        tape.setRealRuns(realRuns);
-    }
-
-    public void setEmptyRuns(UUID id, int emptyRuns)
-    {
-        Tape tape = this.tapes.get(id);
-        if(tape == null)
-            throw new NoSuchElementException();
-
-        tape.setEmptyRuns(emptyRuns);
-    }
-
-    public void setRecordsInEachRun(UUID id, List<Integer> recordsCount)
-    {
-        Tape tape = this.tapes.get(id);
-        if(tape == null)
-            throw new NoSuchElementException();
-
-        tape.setRecordsInEachRun(recordsCount);
-    }*/
 
     // Some boolean check methods
 

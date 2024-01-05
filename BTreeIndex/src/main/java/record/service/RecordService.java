@@ -278,21 +278,6 @@ public class RecordService {
         tapeService.removeNextRun(id);
     }
 
-    /*public void setRealRuns(UUID id, int realRuns)
-    {
-        tapeService.setRealRuns(id, realRuns);
-    }
-
-    public void setEmptyRuns(UUID id, int emptyRuns)
-    {
-        tapeService.setEmptyRuns(id, emptyRuns);
-    }
-
-    public void setRecordsInEachRun(UUID id, List<Integer> recordsCount)
-    {
-        tapeService.setRecordsInEachRun(id, recordsCount);
-    }*/
-
     public boolean isInputTape(UUID id)
     {
         return tapeService.isInputTape(id);
