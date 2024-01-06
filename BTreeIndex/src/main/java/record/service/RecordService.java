@@ -178,6 +178,16 @@ public class RecordService {
         return tapeService.getInputTapeID();
     }
 
+    public Set<UUID> getIndexTapesIDs()
+    {
+        return tapeService.getIndexTapesIDs();
+    }
+
+    public Set<UUID> getDataTapesIDs()
+    {
+        return tapeService.getDataTapesIDs();
+    }
+
     public void createTape(UUID id, boolean isIndexTape)
     {
         tapeService.create(id, isIndexTape);
@@ -222,6 +232,16 @@ public class RecordService {
         this.writeBlocksOffs.remove(id);
     }
 
+    public void freeBufferedBlock(UUID tapeID, int page)
+    {
+        tapeService.freeBufferedBlock(tapeID, page);
+    }
+
+    public Set<Integer> getBufferedPages(UUID tapeID)
+    {
+        return tapeService.getBufferedPages(tapeID);
+    }
+
     public int getReads(UUID id)
     {
         return tapeService.getReads(id);
@@ -232,9 +252,49 @@ public class RecordService {
         return tapeService.getWrites(id);
     }
 
+    public int getTapeMaxBuffers(UUID id)
+    {
+        return tapeService.getMaxBuffers(id);
+    }
+
+    public void setTapeMaxBuffers(UUID id, int n)
+    {
+        tapeService.setMaxBuffers(id, n);
+    }
+
+    public int getFreeSpaceOnPage(UUID tapeID, int page)
+    {
+        return tapeService.getFreeSpaceOnPage(tapeID, page);
+    }
+
+    public void setFreeSpaceOnPage(UUID tapeID, int page, int amount)
+    {
+        tapeService.setFreeSpaceOnPage(tapeID, page, amount);
+    }
+
+    public int getTapePages(UUID id)
+    {
+        return tapeService.getPages(id);
+    }
+
+    public void addNextPage(UUID tapeID)
+    {
+        tapeService.addNextPage(tapeID);
+    }
+
     public boolean isInputTape(UUID id)
     {
         return tapeService.isInputTape(id);
+    }
+
+    public boolean isIndexTape(UUID id)
+    {
+        return tapeService.isIndexTape(id);
+    }
+
+    public boolean isTapeMaxBuffers(UUID id)
+    {
+        return tapeService.isMaxBuffers(id);
     }
 
     public boolean isEOF(UUID id)
