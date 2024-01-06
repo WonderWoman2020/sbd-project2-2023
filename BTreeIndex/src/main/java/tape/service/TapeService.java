@@ -258,27 +258,41 @@ public class TapeService {
      * @return Byte array with data read from the tape file.
      * (Maybe of size of the {@link TapeService#BLOCK_SIZE} or smaller, if it is the last chunk of data in file)
      */
+    // TODO If I ever use removeLastPage(), I should change isEOF() method or the removal method to include also resizing file
     public byte[] readNextBlock(UUID id)
     {
         Tape tape = this.tapes.get(id);
         if(tape == null)
             throw new NoSuchElementException();
 
+        byte[] data = this.readPage(id, tapesCurrentReadBlock.get(tape.getId()));
+
+        if(data != null)
+            this.tapesCurrentReadBlock.put(tape.getId(), tapesCurrentReadBlock.get(tape.getId()) + 1);
+
+        return data;
+    }
+
+    public byte[] readPage(UUID id, int page)
+    {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        if(page < 0 || page >= this.getPages(id))
+            throw new NoSuchElementException("Requested page to read doesn't exist.");
 
         HashMap<Integer, byte[]> tapeBufferedBlocks = this.tapesBufferedBlocks.get(id);
         if(tapeBufferedBlocks == null)
             throw new NoSuchElementException("Something went wrong. Requested tape exists, but its buffers hashmap" +
                     " hasn't been initialized.");
 
-        byte[] bufferedBlock = tapeBufferedBlocks.get(this.tapesCurrentReadBlock.get(id));
+        byte[] bufferedBlock = tapeBufferedBlocks.get(page);
         byte[] data = null;
         if(bufferedBlock != null)
             data = bufferedBlock;
         else
-            data = this.readBlock(id, (long) this.BLOCK_SIZE *this.tapesCurrentReadBlock.get(id));
-
-        if(data != null)
-            this.tapesCurrentReadBlock.put(tape.getId(), tapesCurrentReadBlock.get(tape.getId()) + 1);
+            data = this.readBlock(id, (long) this.BLOCK_SIZE * page);
 
         return data;
     }
