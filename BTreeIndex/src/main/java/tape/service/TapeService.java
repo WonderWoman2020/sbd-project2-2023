@@ -56,6 +56,11 @@ public class TapeService {
      */
     private FilesUtility filesUtility;
 
+    /**
+     * Currently buffered blocks (disk pages) of tapes, with numbers of pages.
+     */
+    private HashMap<UUID, HashMap<Integer, byte[]>> tapesBufferedBlocks;
+
 
     // CRUD operations on tapes (in particular, on the data files)
 
@@ -118,6 +123,7 @@ public class TapeService {
                 .isInputTape(false)
                 .isIndexTape(isIndexTape)
                 .freeSpaceOnEachPage(new ArrayList<>())
+                .maxBuffers(0)
                 .reads(0)
                 .writes(0)
                 .build();
@@ -125,6 +131,7 @@ public class TapeService {
         this.tapes.put(tape.getId(), tape);
         this.tapesCurrentReadBlock.put(tape.getId(), 0);
         this.tapesCurrentWriteBlock.put(tape.getId(), 0);
+        this.tapesBufferedBlocks.put(tape.getId(), new HashMap<>());
     }
 
     // Special create method, only to create input tape
@@ -136,6 +143,7 @@ public class TapeService {
                 .isInputTape(true)
                 .isIndexTape(false)
                 .freeSpaceOnEachPage(new ArrayList<>())
+                .maxBuffers(0)
                 .reads(0)
                 .writes(0)
                 .build();
@@ -143,6 +151,7 @@ public class TapeService {
         this.tapes.put(inputTape.getId(), inputTape);
         this.tapesCurrentReadBlock.put(inputTape.getId(), 0);
         this.tapesCurrentWriteBlock.put(inputTape.getId(), 0);
+        this.tapesBufferedBlocks.put(inputTape.getId(), new HashMap<>());
     }
 
     /** Special delete method, only to remove input tape object without deleting the input file from disk
@@ -156,6 +165,7 @@ public class TapeService {
 
         this.tapesCurrentReadBlock.remove(tape.getId(), 0);
         this.tapesCurrentWriteBlock.remove(tape.getId(), 0);
+        this.tapesBufferedBlocks.remove(tape.getId());
     }
 
     public void delete(UUID id)
@@ -166,6 +176,7 @@ public class TapeService {
 
         this.tapesCurrentReadBlock.remove(tape.getId(), 0);
         this.tapesCurrentWriteBlock.remove(tape.getId(), 0);
+        this.tapesBufferedBlocks.remove(tape.getId());
 
         if(tape.getFile() == null)
             throw new NoSuchElementException("File in tape was null.");
@@ -187,6 +198,7 @@ public class TapeService {
 
         this.tapesCurrentReadBlock.put(tape.getId(), 0);
         this.tapesCurrentWriteBlock.put(tape.getId(), 0);
+        this.tapesBufferedBlocks.remove(tape.getId());
     }
 
     public void copyTapeFile(UUID id, String path, String fileName)
@@ -335,6 +347,46 @@ public class TapeService {
             throw new NoSuchElementException();
 
         this.tapesCurrentWriteBlock.put(tape.getId(), 0);
+    }
+
+    public void freeBufferedBlock(UUID id, int page)
+    {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        if(page < 0 || page >= this.getPages(id))
+            throw new NoSuchElementException("Requested page to free its buffer doesn't exist.");
+
+        HashMap<Integer, byte[]> tapeBufferedBlocks = this.tapesBufferedBlocks.get(id);
+        if(tapeBufferedBlocks == null)
+            throw new NoSuchElementException("Something went wrong. Requested tape exists, but its buffers hashmap" +
+                    " hasn't been initialized.");
+
+        byte[] bufferedBlock = tapeBufferedBlocks.get(page);
+        if(bufferedBlock == null)
+            throw new NoSuchElementException("Requested page buffer to free isn't even loaded, so it cannot be freed.");
+
+        tapeBufferedBlocks.remove(page);
+        this.tapesBufferedBlocks.put(id, tapeBufferedBlocks);
+    }
+
+    /**
+     * Returns numbers of pages, which currently are being buffered for this tape.
+     * @return
+     */
+    public Set<Integer> getBufferedPages(UUID id)
+    {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        HashMap<Integer, byte[]> tapeBufferedBlocks = this.tapesBufferedBlocks.get(id);
+        if(tapeBufferedBlocks == null)
+            throw new NoSuchElementException("Something went wrong. Requested tape exists, but its buffers hashmap" +
+                    " hasn't been initialized.");
+
+        return tapeBufferedBlocks.keySet();
     }
 
     // Getters and setters for some tape properties
@@ -487,8 +539,14 @@ public class TapeService {
         if(freeSpaces.isEmpty())
             throw new NoSuchElementException("There was no more pages to remove.");
 
-        freeSpaces.remove(freeSpaces.size() - 1);
+        int lastPage = freeSpaces.size() - 1;
+        freeSpaces.remove(lastPage);
         tape.setFreeSpaceOnEachPage(freeSpaces);
+
+        // Clean up also the buffer, if the page is loaded, to not store wrong data
+        HashMap<Integer, byte[]> tapeBufferedBlocks = this.tapesBufferedBlocks.get(id);
+        if(tapeBufferedBlocks != null)
+            tapeBufferedBlocks.remove(lastPage);
     }
 
     // Some boolean check methods
@@ -509,6 +567,14 @@ public class TapeService {
             throw new NoSuchElementException();
 
         return tape.isIndexTape();
+    }
+
+    public boolean isMaxBuffers(UUID id)
+    {
+        if(this.getBufferedPages(id).size() > this.getMaxBuffers(id))
+            throw new IllegalStateException("There was too many buffered pages (more than max buffers limit for this tape.");
+        
+        return this.getBufferedPages(id).size() == this.getMaxBuffers(id);
     }
 
     /**
