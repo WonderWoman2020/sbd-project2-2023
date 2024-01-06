@@ -253,17 +253,29 @@ public class TapeService {
     /**
      * Reads tape file sequentially (block by block or, in other words, chunk by chunk)
      * controlling the current position in file with {@link TapeService#tapesCurrentReadBlock} field.
+     * <strong>This method is updated from its first version to use (read) buffered blocks, if they are loaded.</strong>
      * @param id
      * @return Byte array with data read from the tape file.
      * (Maybe of size of the {@link TapeService#BLOCK_SIZE} or smaller, if it is the last chunk of data in file)
      */
     public byte[] readNextBlock(UUID id)
     {
-        byte[] data = this.readBlock(id, (long) this.BLOCK_SIZE *this.tapesCurrentReadBlock.get(id));
-
         Tape tape = this.tapes.get(id);
         if(tape == null)
             throw new NoSuchElementException();
+
+
+        HashMap<Integer, byte[]> tapeBufferedBlocks = this.tapesBufferedBlocks.get(id);
+        if(tapeBufferedBlocks == null)
+            throw new NoSuchElementException("Something went wrong. Requested tape exists, but its buffers hashmap" +
+                    " hasn't been initialized.");
+
+        byte[] bufferedBlock = tapeBufferedBlocks.get(this.tapesCurrentReadBlock.get(id));
+        byte[] data = null;
+        if(bufferedBlock != null)
+            data = bufferedBlock;
+        else
+            data = this.readBlock(id, (long) this.BLOCK_SIZE *this.tapesCurrentReadBlock.get(id));
 
         if(data != null)
             this.tapesCurrentReadBlock.put(tape.getId(), tapesCurrentReadBlock.get(tape.getId()) + 1);
@@ -309,6 +321,7 @@ public class TapeService {
     /**
      * Writes to tape file sequentially (block by block or, in other words, chunk by chunk)
      * controlling the current position in file with {@link TapeService#tapesCurrentWriteBlock} field.
+     * <strong>This method is updated from its first version to use (update) buffered blocks, if they are loaded.</strong>
      * @param id
      * @param data Provided data blocks should be of size of the {@link TapeService#BLOCK_SIZE} and ({@code len}
      *             parameter tells how much data we want to write from it.
@@ -319,14 +332,27 @@ public class TapeService {
      */
     public boolean writeNextBlock(UUID id, byte[] data, int len) throws InvalidAlgorithmParameterException
     {
-        boolean written = this.writeBlock(id, (long) this.BLOCK_SIZE *this.tapesCurrentWriteBlock.get(id), data, len);
-
         Tape tape = this.tapes.get(id);
         if(tape == null)
             throw new NoSuchElementException();
 
+        boolean written = this.writeBlock(id, (long) this.BLOCK_SIZE *this.tapesCurrentWriteBlock.get(id), data, len);
+
         if(written)
             this.tapesCurrentWriteBlock.put(tape.getId(), tapesCurrentWriteBlock.get(tape.getId()) + 1);
+
+        HashMap<Integer, byte[]> tapeBufferedBlocks = this.tapesBufferedBlocks.get(id);
+        if(tapeBufferedBlocks == null)
+            throw new NoSuchElementException("Something went wrong. Requested tape exists, but its buffers hashmap" +
+                    " hasn't been initialized.");
+
+        byte[] bufferedBlock = tapeBufferedBlocks.get(this.tapesCurrentReadBlock.get(id));
+        if(bufferedBlock != null)
+        {
+            bufferedBlock = data;
+            tapeBufferedBlocks.put(this.tapesCurrentReadBlock.get(id), bufferedBlock);
+            this.tapesBufferedBlocks.put(id, tapeBufferedBlocks);
+        }
 
         return written;
     }
@@ -573,7 +599,7 @@ public class TapeService {
     {
         if(this.getBufferedPages(id).size() > this.getMaxBuffers(id))
             throw new IllegalStateException("There was too many buffered pages (more than max buffers limit for this tape.");
-        
+
         return this.getBufferedPages(id).size() == this.getMaxBuffers(id);
     }
 
