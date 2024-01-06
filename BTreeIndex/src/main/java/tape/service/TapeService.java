@@ -85,7 +85,30 @@ public class TapeService {
 
         return inputTape.get().getId();
     }
-    public void create(UUID id)
+
+    /**
+     * Returns all tapes IDs that are of a type of index tape except input tape
+     * @return
+     */
+    public Set<UUID> getIndexTapesIDs()
+    {
+        return this.tapes.keySet().stream()
+                .filter(id -> this.isIndexTape(id) && !this.isInputTape(id))
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Returns all tapes IDs that are not of a type of index tape except input tape - and hence, since in this project
+     * there are only 2 tape types, it returns all the data tapes IDs.
+     * @return
+     */
+    public Set<UUID> getDataTapesIDs()
+    {
+        return this.tapes.keySet().stream()
+                .filter(id -> !this.isIndexTape(id) && !this.isInputTape(id))
+                .collect(Collectors.toSet());
+    }
+    public void create(UUID id, boolean isIndexTape)
     {
         filesUtility.createDirs(Path.of(filesPath));
         File emptyFile = filesUtility.createFile(Path.of(filesPath,filesBaseName +"_"+ id.toString() + ".dat"));
@@ -93,6 +116,8 @@ public class TapeService {
                 .id(id)
                 .file(emptyFile)
                 .isInputTape(false)
+                .isIndexTape(isIndexTape)
+                .freeSpaceOnEachPage(new ArrayList<>())
                 .reads(0)
                 .writes(0)
                 .build();
@@ -109,6 +134,8 @@ public class TapeService {
                 .id(id)
                 .file(file)
                 .isInputTape(true)
+                .isIndexTape(false)
+                .freeSpaceOnEachPage(new ArrayList<>())
                 .reads(0)
                 .writes(0)
                 .build();
@@ -347,6 +374,105 @@ public class TapeService {
         tape.setWrites(tape.getWrites()+1);
     }
 
+    /**
+     *
+     * @param id
+     * @param page
+     * @return Amount of declared free space on this page or throws exception, if there is no such page.
+     */
+    public int getFreeSpaceOnPage(UUID id, int page)
+    {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        if(page < 0)
+            throw new IllegalStateException("Provided page parameter was below 0. The page parameter should be" +
+                    " equal to or bigger than 0.");
+
+        if(page >= this.getPages(id))
+            throw new NoSuchElementException("The page, of which free space was requested to set, doesn't exist.");
+
+        List<Integer> freeSpaces = tape.getFreeSpaceOnEachPage();
+        Integer freeSpace = freeSpaces.get(page);
+        if(freeSpace == null)
+            throw new NoSuchElementException("For some reason, free space amount for this page wasn't initialized.");
+
+        return freeSpace;
+    }
+
+    /**
+     * This method stores declared free space amount in relation to the requested page. (A Hashmap, where page is key,
+     * and free space on it is a value)
+     * @param id
+     * @param page Count starts from 0.
+     * @param amount Can range from 0 to {@link TapeService#BLOCK_SIZE}, which is a size of the disk page.
+     */
+    public void setFreeSpaceOnPage(UUID id, int page, int amount)
+    {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        if(page < 0 || amount < 0)
+            throw new IllegalStateException("Provided page or amount parameter was below 0. Both parameters should be" +
+                    " equal to or bigger than 0.");
+
+        if(amount > this.BLOCK_SIZE)
+            throw new IllegalStateException("Declared page free space available was bigger than the page size.");
+
+        if(page >= this.getPages(id))
+            throw new NoSuchElementException("The page, of which free space was requested to set, doesn't exist.");
+
+        List<Integer> freeSpaces = tape.getFreeSpaceOnEachPage();
+        freeSpaces.set(page, amount);
+        tape.setFreeSpaceOnEachPage(freeSpaces);
+    }
+
+    /**
+     * Get existing pages count.
+     * @param id
+     * @return
+     */
+    public int getPages(UUID id)
+    {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        return tape.getFreeSpaceOnEachPage().size();
+    }
+
+    /**
+     * New page size is assumed to be the equal to {@link TapeService#BLOCK_SIZE} and as it is a new page, free
+     * space is set to its size.
+     * @param id
+     */
+    public void addNextPage(UUID id)
+    {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        List<Integer> freeSpaces = tape.getFreeSpaceOnEachPage();
+        freeSpaces.add(this.BLOCK_SIZE);
+        tape.setFreeSpaceOnEachPage(freeSpaces);
+    }
+
+    public void removeLastPage(UUID id)
+    {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        List<Integer> freeSpaces = tape.getFreeSpaceOnEachPage();
+        if(freeSpaces.isEmpty())
+            throw new NoSuchElementException("There was no more pages to remove.");
+
+        freeSpaces.remove(freeSpaces.size() - 1);
+        tape.setFreeSpaceOnEachPage(freeSpaces);
+    }
+
     // Some boolean check methods
 
     public boolean isInputTape(UUID id)
@@ -356,6 +482,15 @@ public class TapeService {
             throw new NoSuchElementException();
 
         return tape.isInputTape();
+    }
+
+    public boolean isIndexTape(UUID id)
+    {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        return tape.isIndexTape();
     }
 
     /**

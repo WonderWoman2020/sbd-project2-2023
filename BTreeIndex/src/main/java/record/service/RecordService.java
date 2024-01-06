@@ -178,9 +178,9 @@ public class RecordService {
         return tapeService.getInputTapeID();
     }
 
-    public void createTape(UUID id)
+    public void createTape(UUID id, boolean isIndexTape)
     {
-        tapeService.create(id);
+        tapeService.create(id, isIndexTape);
     }
 
     public void setInputTape(UUID id, File file)
