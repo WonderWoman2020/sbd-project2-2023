@@ -61,6 +61,11 @@ public class TapeService {
      */
     private HashMap<UUID, HashMap<Integer, byte[]>> tapesBufferedBlocks;
 
+    /**
+     * Information whether sequential reading reached End of file on each tape.
+     */
+    private HashMap<UUID, Boolean> isEOF;
+
 
     // CRUD operations on tapes (in particular, on the data files)
 
@@ -132,6 +137,7 @@ public class TapeService {
         this.tapesCurrentReadBlock.put(tape.getId(), 0);
         this.tapesCurrentWriteBlock.put(tape.getId(), 0);
         this.tapesBufferedBlocks.put(tape.getId(), new HashMap<>());
+        this.isEOF.put(tape.getId(), false);
     }
 
     // Special create method, only to create input tape
@@ -152,6 +158,7 @@ public class TapeService {
         this.tapesCurrentReadBlock.put(inputTape.getId(), 0);
         this.tapesCurrentWriteBlock.put(inputTape.getId(), 0);
         this.tapesBufferedBlocks.put(inputTape.getId(), new HashMap<>());
+        this.isEOF.put(inputTape.getId(), false);
     }
 
     /** Special delete method, only to remove input tape object without deleting the input file from disk
@@ -166,6 +173,7 @@ public class TapeService {
         this.tapesCurrentReadBlock.remove(tape.getId(), 0);
         this.tapesCurrentWriteBlock.remove(tape.getId(), 0);
         this.tapesBufferedBlocks.remove(tape.getId());
+        this.isEOF.remove(tape.getId());
     }
 
     public void delete(UUID id)
@@ -177,6 +185,7 @@ public class TapeService {
         this.tapesCurrentReadBlock.remove(tape.getId(), 0);
         this.tapesCurrentWriteBlock.remove(tape.getId(), 0);
         this.tapesBufferedBlocks.remove(tape.getId());
+        this.isEOF.remove(tape.getId());
 
         if(tape.getFile() == null)
             throw new NoSuchElementException("File in tape was null.");
@@ -199,6 +208,7 @@ public class TapeService {
         this.tapesCurrentReadBlock.put(tape.getId(), 0);
         this.tapesCurrentWriteBlock.put(tape.getId(), 0);
         this.tapesBufferedBlocks.remove(tape.getId());
+        this.isEOF.remove(tape.getId());
     }
 
     public void copyTapeFile(UUID id, String path, String fileName)
@@ -266,6 +276,9 @@ public class TapeService {
             throw new NoSuchElementException();
 
         byte[] data = this.readPage(id, tapesCurrentReadBlock.get(tape.getId()));
+
+        if(data == null)
+            this.isEOF.put(id, true);
 
         if(data != null)
             this.tapesCurrentReadBlock.put(tape.getId(), tapesCurrentReadBlock.get(tape.getId()) + 1);
@@ -391,6 +404,7 @@ public class TapeService {
             throw new NoSuchElementException();
 
         this.tapesCurrentReadBlock.put(tape.getId(), 0);
+        this.isEOF.put(tape.getId(), false);
     }
 
     public void resetBlockWriting(UUID id)
@@ -630,12 +644,14 @@ public class TapeService {
         return this.getBufferedPages(id).size() == this.getMaxBuffers(id);
     }
 
-    /**
-     * Checks if sequential block reading has already reached end of the tape data file. It compares file length and
-     * current reading position to tell, whether the sequential reading is finished. (Assumes correct execution of
-     * sequential reading - from start to the end of the file. Ignores possibility of skipping blocks while reading.)
+    /** <strong>(Updated version)</strong>
+     * Checks if sequential block reading has already reached end of the tape data file. It just checks boolean
+     * variable, which is set in sequential reading methods like readNextBlock() when EOF is reached.
+     * (Assumes correct execution of sequential reading - from start to the end of the file. Ignores possibility
+     * of skipping blocks while reading.)
      * @param id
-     * @return True - if current reading position is equal to or bigger than the file size. False - otherwise.
+     * @return True - if EOF was reached in sequential reading methods. False - otherwise. (Its correctness depends
+     * on correct execution of sequential read methods.)
      */
     public boolean isEOF(UUID id)
     {
@@ -643,15 +659,12 @@ public class TapeService {
         if(tape == null)
             throw new NoSuchElementException();
 
-        try(RandomAccessFile raf = new RandomAccessFile(tape.getFile(), "r"))
-        {
-            if((long) this.tapesCurrentReadBlock.get(id) * this.BLOCK_SIZE >= raf.length())
-                return true;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        Boolean isEOF = this.isEOF.get(id);
+        if(isEOF == null)
+            throw new NoSuchElementException("For some reason, variable to check if End of file was reached " +
+                    "(in sequential reading of this tape) hasn't been initialized.");
 
-        return false;
+        return isEOF;
     }
 
 }
