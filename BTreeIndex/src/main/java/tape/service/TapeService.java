@@ -292,7 +292,7 @@ public class TapeService {
         if(tape == null)
             throw new NoSuchElementException();
 
-        if(page < 0 || page >= this.getPages(id))
+        if(page < 0)
             throw new NoSuchElementException("Requested page to read doesn't exist.");
 
         HashMap<Integer, byte[]> tapeBufferedBlocks = this.tapesBufferedBlocks.get(id);
@@ -306,6 +306,18 @@ public class TapeService {
             data = bufferedBlock;
         else
             data = this.readBlock(id, (long) this.BLOCK_SIZE * page);
+
+        if(page >= this.getPages(id)) {
+            if (data != null)
+                throw new IllegalStateException("This page shouldn't exist (taking in account the counter), but reading from" +
+                        " file returned data (which means End of file hasn't been reached). File is larger than pages count.");
+            
+            throw new NoSuchElementException("Requested page to read doesn't exist.");
+        }
+
+        if(data == null)
+            throw new IllegalStateException("This page should exist (taking in account the counter), but reading from" +
+                    " file returned null (which means End of file in this method). File is shorter than pages count.");
 
         return data;
     }
@@ -386,11 +398,11 @@ public class TapeService {
             throw new NoSuchElementException("Something went wrong. Requested tape exists, but its buffers hashmap" +
                     " hasn't been initialized.");
 
-        byte[] bufferedBlock = tapeBufferedBlocks.get(this.tapesCurrentReadBlock.get(id));
+        byte[] bufferedBlock = tapeBufferedBlocks.get(page);
         if(bufferedBlock != null)
         {
             bufferedBlock = data;
-            tapeBufferedBlocks.put(this.tapesCurrentReadBlock.get(id), bufferedBlock);
+            tapeBufferedBlocks.put(page, bufferedBlock);
             this.tapesBufferedBlocks.put(id, tapeBufferedBlocks);
         }
 
