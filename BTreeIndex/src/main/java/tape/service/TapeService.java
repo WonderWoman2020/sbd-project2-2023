@@ -374,6 +374,24 @@ public class TapeService {
         tape.setWrites(tape.getWrites()+1);
     }
 
+    public int getMaxBuffers(UUID id)
+    {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        return tape.getMaxBuffers();
+    }
+
+    public void setMaxBuffers(UUID id, int n)
+    {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        tape.setMaxBuffers(n);
+    }
+
     /**
      *
      * @param id

@@ -50,6 +50,11 @@ public class Tape {
     private List<Integer> freeSpaceOnEachPage;
 
     /**
+     * Max buffers amount for the tape. It can change during the runtime to allow allocating more or less buffers.
+     */
+    private int maxBuffers;
+
+    /**
      * Count of <strong>read</strong> operations done on the tape file.
      */
     private int reads;
