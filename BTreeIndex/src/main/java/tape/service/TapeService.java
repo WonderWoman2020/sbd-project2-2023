@@ -350,10 +350,23 @@ public class TapeService {
         if(tape == null)
             throw new NoSuchElementException();
 
-        boolean written = this.writeBlock(id, (long) this.BLOCK_SIZE *this.tapesCurrentWriteBlock.get(id), data, len);
+        boolean written = this.writePage(id, this.tapesCurrentWriteBlock.get(id), data, len);
 
         if(written)
             this.tapesCurrentWriteBlock.put(tape.getId(), tapesCurrentWriteBlock.get(tape.getId()) + 1);
+
+        return written;
+    }
+
+    public boolean writePage(UUID id, int page, byte[] data, int len) throws InvalidAlgorithmParameterException {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        if(page < 0 || page >= this.getPages(id))
+            throw new NoSuchElementException("Requested page to write doesn't exist.");
+
+        boolean written = this.writeBlock(id, (long) this.BLOCK_SIZE * page, data, len);
 
         HashMap<Integer, byte[]> tapeBufferedBlocks = this.tapesBufferedBlocks.get(id);
         if(tapeBufferedBlocks == null)
