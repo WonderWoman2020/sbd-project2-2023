@@ -101,7 +101,7 @@ public class RecordConverter {
         if(record == null)
             return null;
 
-        return record.getKey()+" "+record.getMass()+" "+record.getSpeed();
+        return Long.toUnsignedString(record.getKey())+" "+record.getMass()+" "+record.getSpeed();
     }
 
     public Record stringToRecord(String data)

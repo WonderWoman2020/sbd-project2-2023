@@ -1,6 +1,9 @@
 package app;
 
+import data_generator.CommandGenerator;
+import data_generator.DataGenerator;
 import data_generator.FilesUtility;
+import record.converter.RecordConverter;
 
 import java.io.File;
 
@@ -27,5 +30,16 @@ public class App
         filesUtility1.deleteDir(new File(OUTPUT_PATH));
         filesUtility1.deleteDir(new File(TAPES_PATH));
         System.out.println("Deleted all files created in previous app runs.");
+
+        // Command generator tests
+        DataGenerator dataGenerator = new DataGenerator(new RecordConverter(), new FilesUtility());
+        CommandGenerator commandGenerator = CommandGenerator.builder()
+                .filesUtility(new FilesUtility())
+                .dataGenerator(dataGenerator)
+                .recordConverter(new RecordConverter())
+                .generatedRecords(null)
+                .build();
+
+        commandGenerator.generateCommandsFile(INPUT_PATH, "generated_commands.txt", 10);
     }
 }
