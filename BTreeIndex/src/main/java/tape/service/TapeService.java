@@ -295,6 +295,10 @@ public class TapeService {
         if(page < 0)
             throw new NoSuchElementException("Requested page to read doesn't exist.");
 
+        if(this.isMaxBuffers(id))
+            throw new IllegalStateException("There is max count of buffers loaded for this page already." +
+                    " Some buffer needs to be freed first.");
+
         HashMap<Integer, byte[]> tapeBufferedBlocks = this.tapesBufferedBlocks.get(id);
         if(tapeBufferedBlocks == null)
             throw new NoSuchElementException("Something went wrong. Requested tape exists, but its buffers hashmap" +
@@ -318,6 +322,10 @@ public class TapeService {
         if(data == null)
             throw new IllegalStateException("This page should exist (taking in account the counter), but reading from" +
                     " file returned null (which means End of file in this method). File is shorter than pages count.");
+
+        bufferedBlock = data;
+        tapeBufferedBlocks.put(page, bufferedBlock);
+        this.tapesBufferedBlocks.put(id, tapeBufferedBlocks);
 
         return data;
     }
