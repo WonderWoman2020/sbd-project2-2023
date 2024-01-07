@@ -522,11 +522,19 @@ public class TapeService {
         return tape.getMaxBuffers();
     }
 
+    /**
+     * The buffers limit must be at least equal to 1, so any buffers could be loaded.
+     * @param id
+     * @param n
+     */
     public void setMaxBuffers(UUID id, int n)
     {
         Tape tape = this.tapes.get(id);
         if(tape == null)
             throw new NoSuchElementException();
+
+        if(n <= 0)
+            throw new IllegalStateException("Max buffers limit for a tape must be bigger than 0, so any buffers could be loaded.");
 
         tape.setMaxBuffers(n);
     }
@@ -602,7 +610,12 @@ public class TapeService {
 
     /**
      * New page size is assumed to be the equal to {@link TapeService#BLOCK_SIZE} and as it is a new page, free
-     * space is set to its size.
+     * space is set to its size. New page is also added to buffer. <strong>Attention:</strong>
+     * To not unnecessarily increase write operations, after addNextPage()
+     * there must be performed writing that new page to a file, after adding the data to it, because <strong>this method
+     * does not resize the file on disk</strong> - if writing this page is aborted and therefore this page won't exist,
+     * it needs to be removed using removeLastPage(), which decreases pages counter and free page buffer (a method
+     * reverse to this method).
      * @param id
      */
     public void addNextPage(UUID id)
@@ -614,6 +627,19 @@ public class TapeService {
         List<Integer> freeSpaces = tape.getFreeSpaceOnEachPage();
         freeSpaces.add(this.BLOCK_SIZE);
         tape.setFreeSpaceOnEachPage(freeSpaces);
+
+        // Add also a fresh buffer for that new page, it will be added to file after first write of this buffer
+        if(this.isMaxBuffers(id))
+            throw new IllegalStateException("There is max count of buffers loaded for this page already." +
+                    " Some buffer needs to be freed first.");
+
+        HashMap<Integer, byte[]> tapeBufferedBlocks = this.tapesBufferedBlocks.get(id);
+        if(tapeBufferedBlocks == null)
+            throw new NoSuchElementException("Something went wrong. Requested tape exists, but its buffers hashmap" +
+                    " hasn't been initialized.");
+
+        tapeBufferedBlocks.put(freeSpaces.size() - 1, new byte[this.BLOCK_SIZE]);
+        this.tapesBufferedBlocks.put(id, tapeBufferedBlocks);
     }
 
     public void removeLastPage(UUID id)
