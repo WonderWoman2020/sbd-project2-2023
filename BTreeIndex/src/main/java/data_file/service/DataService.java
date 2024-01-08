@@ -19,12 +19,29 @@ public class DataService {
 
     RecordService recordService;
 
-    public void createRecord(UUID tapeID, int page, Record record) throws InvalidAlgorithmParameterException {
-        if(page < 0 || page >= recordService.getTapePages(tapeID))
-            throw new IllegalStateException("Page requested to create a new record on it doesn't exist.");
+    /**
+     *
+     * @param tapeID
+     * @param record
+     * @return Returns page number, on which the record was successfully stored
+     * @throws InvalidAlgorithmParameterException
+     */
+    public int createRecord(UUID tapeID, Record record) throws InvalidAlgorithmParameterException {
+        int page = this.findSpaceForRecord(tapeID, record);
+        if(page == -1) {
+            page = recordService.getTapePages(tapeID);
+            this.assureBufferForPage(tapeID, page);
+            recordService.addNextPage(tapeID);
+            if(page != this.findSpaceForRecord(tapeID, record))
+                throw new IllegalStateException("New page should have been added to tape buffers," +
+                        " but there is still being reported no space for the record. The record might be too big" +
+                        " or something different went wrong.");
+        }
+        else
+            this.assureBufferForPage(tapeID, page);
 
-        this.assureBufferForPage(tapeID, page);
         recordService.createRecord(tapeID, page, record);
+        return page;
     }
 
     public Record findRecord(UUID tapeID, int page, long key)
@@ -59,7 +76,7 @@ public class DataService {
      * @return Returns page nr with enough space to write the record on it, or -1, if all pages
      * are full (or there is none yet) and new page needs to be added to tape.
      */
-    public int findSpaceForRecord(UUID tapeID, Record record)
+    private int findSpaceForRecord(UUID tapeID, Record record)
     {
         if(record == null)
             throw new IllegalStateException("Record provided to find space for was null.");
@@ -98,6 +115,12 @@ public class DataService {
         return furthestPage.get();
     }
 
+    /**
+     * It assures that there is a space to read a new page, if it isn't already loaded.
+     * @param tapeID
+     * @param page The page may not exist (it may be one that is being created just now), it just frees a buffer if needed.
+     *             Page parameter is for algorithm of choosing which buffer to free, to take it into account.
+     */
     private void assureBufferForPage(UUID tapeID, int page)
     {
         if(!recordService.getBufferedPages(tapeID).contains(page))
