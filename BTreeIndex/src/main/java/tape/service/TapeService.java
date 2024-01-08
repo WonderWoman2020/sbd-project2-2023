@@ -295,8 +295,8 @@ public class TapeService {
         if(page < 0)
             throw new NoSuchElementException("Requested page to read doesn't exist.");
 
-        if(this.isMaxBuffers(id))
-            throw new IllegalStateException("There is max count of buffers loaded for this page already." +
+        if(this.isMaxBuffers(id) && !this.getBufferedPages(id).contains(page))
+            throw new IllegalStateException("There is max count of buffers loaded for this tape already." +
                     " Some buffer needs to be freed first.");
 
         HashMap<Integer, byte[]> tapeBufferedBlocks = this.tapesBufferedBlocks.get(id);
@@ -630,8 +630,12 @@ public class TapeService {
 
         // Add also a fresh buffer for that new page, it will be added to file after first write of this buffer
         if(this.isMaxBuffers(id))
-            throw new IllegalStateException("There is max count of buffers loaded for this page already." +
+            throw new IllegalStateException("There is max count of buffers loaded for this tape already." +
                     " Some buffer needs to be freed first.");
+
+        if(this.getBufferedPages(id).contains(freeSpaces.size() - 1))
+            throw new IllegalStateException("This page is just being created, but a page of this number is also" +
+                    " listed in buffered pages. Something went wrong in maintaining pages.");
 
         HashMap<Integer, byte[]> tapeBufferedBlocks = this.tapesBufferedBlocks.get(id);
         if(tapeBufferedBlocks == null)

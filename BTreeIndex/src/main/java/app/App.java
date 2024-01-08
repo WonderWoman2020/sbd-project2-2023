@@ -1,11 +1,22 @@
 package app;
 
+import data_file.service.DataService;
 import data_generator.CommandGenerator;
 import data_generator.DataGenerator;
 import data_generator.FilesUtility;
+import database.service.DatabaseService;
 import record.converter.RecordConverter;
+import record.entity.Record;
+import record.service.RecordService;
+import tape.service.TapeService;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.security.InvalidAlgorithmParameterException;
+import java.util.HashMap;
+import java.util.UUID;
 
 /**
  * Hello world!
@@ -41,5 +52,66 @@ public class App
                 .build();
 
         commandGenerator.generateCommandsFile(INPUT_PATH, "generated_commands.txt", 10);
+
+        // Some DatabaseService all-in-one tests
+        TapeService tapeService = TapeService.builder()
+                .tapes(new HashMap<>())
+                .tapesCurrentReadBlock(new HashMap<>())
+                .tapesCurrentWriteBlock(new HashMap<>())
+                .tapesBufferedBlocks(new HashMap<>())
+                .isEOF(new HashMap<>())
+                .filesUtility(new FilesUtility())
+                .filesPath(TAPES_PATH)
+                .filesBaseName("tape")
+                .BLOCK_SIZE(400)
+                .build();
+
+        RecordService recordService = RecordService.builder()
+                .tapeService(tapeService)
+                .recordConverter(new RecordConverter())
+                .readBlocksStored(new HashMap<>())
+                .readBlocksOffs(new HashMap<>())
+                .writeBlocksStored(new HashMap<>())
+                .writeBlocksOffs(new HashMap<>())
+                .build();
+
+        DataService dataService = DataService.builder()
+                .recordService(recordService)
+                .build();
+
+        UUID dataTapeID = UUID.randomUUID();
+        UUID indexTapeID = UUID.randomUUID();
+        tapeService.create(dataTapeID, false);
+        tapeService.setMaxBuffers(dataTapeID, 1);
+        tapeService.create(indexTapeID, true);
+        tapeService.setMaxBuffers(indexTapeID, 1);
+
+        DatabaseService databaseService = DatabaseService.builder()
+                .dataService(dataService)
+                .recordConverter(new RecordConverter())
+                .dataTapeID(dataTapeID)
+                .indexTapeID(indexTapeID)
+                .build();
+
+        BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
+        try {
+            System.out.println("Create test:");
+            databaseService.create(input.readLine());
+            System.out.println("Record created.");
+            System.out.println("Read test:");
+            Record record = databaseService.find(input.readLine());
+            System.out.println("Record found:\n"+record);
+            System.out.println("Update test:");
+            databaseService.update(input.readLine());
+            System.out.println("Read test:");
+            System.out.println(databaseService.find(input.readLine()));
+            System.out.println("Delete test:");
+            databaseService.delete(input.readLine());
+            System.out.println("Read test:");
+            System.out.println(databaseService.find(input.readLine()));
+        } catch (InvalidAlgorithmParameterException | IOException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 }

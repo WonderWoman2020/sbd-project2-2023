@@ -290,7 +290,7 @@ public class RecordService {
         // Erase the record
         Arrays.fill(buffer, pos, pos + record.getSize(), (byte) 0);
         // Shift all bytes (possible records) from right to the pos, to remove gap between records
-        System.arraycopy(buffer, pos + record.getSize(), buffer, pos, buffer.length - pos);
+        System.arraycopy(buffer, pos + record.getSize(), buffer, pos, buffer.length - (pos + record.getSize()));
         // Erase old bytes at the end of array, that stayed he same (there could be a redundant copy of a
         // record, that has been shifted 1 spot left)
         Arrays.fill(buffer, buffer.length - record.getSize(), buffer.length, (byte) 0);
