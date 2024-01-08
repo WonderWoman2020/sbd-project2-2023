@@ -4,6 +4,7 @@ import data_file.service.DataService;
 import data_generator.CommandGenerator;
 import data_generator.DataGenerator;
 import data_generator.FilesUtility;
+import database.service.DatabaseRawReader;
 import database.service.DatabaseService;
 import record.converter.RecordConverter;
 import record.entity.Record;
@@ -94,7 +95,7 @@ public class App
                 .build();
 
         BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
-        try {
+        /*try {
             System.out.println("Create test:");
             databaseService.create(input.readLine());
             System.out.println("Record created.");
@@ -110,6 +111,26 @@ public class App
             System.out.println("Read test:");
             System.out.println(databaseService.find(input.readLine()));
         } catch (InvalidAlgorithmParameterException | IOException e) {
+            throw new RuntimeException(e);
+        }*/
+
+        DatabaseRawReader databaseRawReader = DatabaseRawReader.builder()
+                .tapeService(tapeService)
+                .recordConverter(new RecordConverter())
+                .dataTapeID(dataTapeID)
+                .indexTapeID(indexTapeID)
+                .build();
+
+        try {
+            System.out.println("Create some records. To stop, input 'q'");
+            String command = input.readLine();
+            while(!command.equals("q"))
+            {
+                databaseService.create(command);
+                command = input.readLine();
+            }
+            databaseRawReader.readData();
+        } catch (IOException | InvalidAlgorithmParameterException e) {
             throw new RuntimeException(e);
         }
 
