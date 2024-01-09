@@ -33,10 +33,8 @@ public class EntryConverter {
         if((data.length - off) < entry.getSize())
             return null;
 
-        entry.setLeftPointer(ByteBuffer.wrap(data, off, 4).getInt());
-        entry.setKey(ByteBuffer.wrap(data, off + 4, 8).getLong());
-        entry.setDataPage(ByteBuffer.wrap(data, off + 12, 4).getInt());
-        entry.setRightPointer(ByteBuffer.wrap(data, off + 16, 4).getInt());
+        entry.setKey(ByteBuffer.wrap(data, off, 8).getLong());
+        entry.setDataPage(ByteBuffer.wrap(data, off + 8, 4).getInt());
         return entry;
     }
 
@@ -51,10 +49,8 @@ public class EntryConverter {
             return null;
 
         return ByteBuffer.allocate(entry.getSize())
-                .putInt(0, entry.getLeftPointer())
-                .putLong(4, entry.getKey())
-                .putInt(12,entry.getDataPage())
-                .putInt(16, entry.getRightPointer())
+                .putLong(0, entry.getKey())
+                .putInt(8,entry.getDataPage())
                 .array();
     }
 
@@ -75,10 +71,8 @@ public class EntryConverter {
 
         try {
             ByteBuffer.wrap(output, off, entry.getSize())
-                    .putInt(off, entry.getLeftPointer())
-                    .putLong(off + 4, entry.getKey())
-                    .putInt(off + 12, entry.getDataPage())
-                    .putInt(off + 16, entry.getRightPointer());
+                    .putLong(off, entry.getKey())
+                    .putInt(off + 8, entry.getDataPage());
         } catch (IndexOutOfBoundsException e)
         {
             e.printStackTrace();
