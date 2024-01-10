@@ -47,7 +47,8 @@ public class Node {
      */
     public int getSize()
     {
-        return 4 + entries.stream().mapToInt(Entry::getSize).sum() + childPointers.size()*4;
+        return 4 + childPointers.size()*4 +
+                (childPointers.isEmpty() ? 0 : (childPointers.size() - 1) * Entry.builder().build().getSize());
     }
 
 }
