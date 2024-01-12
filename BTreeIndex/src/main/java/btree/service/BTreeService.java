@@ -8,10 +8,8 @@ import lombok.Builder;
 import lombok.ToString;
 import record.entity.Record;
 
-import java.util.Comparator;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.security.InvalidAlgorithmParameterException;
+import java.util.*;
 
 @Builder
 @ToString
@@ -35,14 +33,103 @@ public class BTreeService {
      */
     private int rootPage;
 
-    public void createEntry(UUID tapeID, Entry entry)
-    {
+    /**
+     * Saves node pointer that was checked as the last in findEntryInSubtree() method
+     */
+    private int lastSearchedNode;
+
+    public void createEntry(UUID tapeID, Entry entry) throws InvalidAlgorithmParameterException {
+        if(entryService.getTapePages(tapeID) == 0) // Add first index page, if it doesn't have any yet
+        {
+            this.assureBufferForPage(tapeID, entryService.getTapePages(tapeID));
+            entryService.addNextPage(tapeID);
+            entryService.setFreeSpaceOnPage(tapeID, 0, 0); // Make this page taken by the first node
+            entryService.setNodeParentPointer(tapeID, 0, this.pageToPointer(0));
+            this.rootPage = 0;
+        }
+
+        Entry existingEntry = this.findEntry(tapeID, entry.getKey());
+        if(existingEntry != null)
+        {
+            System.out.println("Entry with provided key already exists. Creation of new entry hasn't succeeded.");
+            return;
+        }
+
+        // Insert on current page
+        if(entryService.getNodeEntries(tapeID, this.pointerToPage(this.lastSearchedNode)) < (2 * this.d))
+        {
+            List<Entry> entries = new ArrayList<>();
+            int n = 0;
+            // Read all entries from the leaf node. As we should be in a leaf, node pointers can be omitted,
+            // because they should be null
+            while(n < entryService.getNodeEntries(tapeID, this.pointerToPage(this.lastSearchedNode)))
+            {
+                Entry readEntry = entryService.readEntry(tapeID, this.pointerToPage(this.lastSearchedNode), n);
+                entries.add(readEntry);
+                n++;
+            }
+            Optional<Entry> firstBiggerEntry = entries.stream()
+                    .filter(nodeEntry -> nodeEntry.getKey() > entry.getKey())
+                    .min(Comparator.comparingLong(Entry::getKey));
+            if(firstBiggerEntry.isEmpty()) // There was no bigger key in this node, so this is the new biggest key entry
+            {
+                int newLastEntryNumber = entryService.getNodeEntries(tapeID, this.pointerToPage(this.lastSearchedNode));
+                entryService.writeEntry(tapeID, this.pointerToPage(lastSearchedNode), newLastEntryNumber, entry);
+            }
+            else
+            {
+                int biggerEntryNumber = entries.indexOf(firstBiggerEntry.get());
+                entries.add(biggerEntryNumber, entry);
+                for(int i = 0; i < entries.size(); i++) // Rewrite all node entries, so they will have order as in the list
+                    entryService.writeEntry(tapeID, this.pointerToPage(lastSearchedNode), i, entries.get(i));
+            }
+            entryService.saveNode(tapeID, this.pointerToPage(lastSearchedNode));
+        }
+
+        // TODO compensation and split
 
     }
 
     public Entry findEntry(UUID tapeID, long key)
     {
-        return null;
+        return this.findEntryInSubtree(tapeID, this.rootPage + 1, key);
+    }
+
+    public Entry findEntryInSubtree(UUID tapeID, int nodePointer, long key)
+    {
+        if(nodePointer == 0)
+            return null;
+
+        if(this.pointerToPage(nodePointer) < 0 || this.pointerToPage(nodePointer) >= entryService.getTapePages(tapeID))
+            throw new IllegalStateException("Page requested to find a node in it doesn't exist.");
+
+        // Saving for other methods to know, which was the last searched node
+        this.lastSearchedNode = nodePointer;
+
+        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+        if(entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)) == 0) // There are no entries yet (possible only with first ever entry)
+            return null;
+
+        int entryNumber = entryService.findEntryNumber(tapeID, this.pointerToPage(nodePointer), key);
+        if(entryNumber != -1)
+            return entryService.readEntry(tapeID, this.pointerToPage(nodePointer), entryNumber);
+
+        Entry minEntry = entryService.readEntry(tapeID, this.pointerToPage(nodePointer), 0);
+        if(key < minEntry.getKey()) {
+            int leftChildPointer = entryService.readNodePointer(tapeID, this.pointerToPage(nodePointer), 0);
+            return this.findEntryInSubtree(tapeID, leftChildPointer, key);
+        }
+
+        int lastEntryNumber = entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)) - 1;
+        Entry maxEntry = entryService.readEntry(tapeID, this.pointerToPage(nodePointer), lastEntryNumber);
+        if(key > maxEntry.getKey()) {
+            int rightChildPointer = entryService.readNodePointer(tapeID, this.pointerToPage(nodePointer), lastEntryNumber + 1);
+            return this.findEntryInSubtree(tapeID, rightChildPointer, key);
+        }
+
+        int firstBiggerEntryNumber = this.findFirstBiggerEntryNumber(tapeID, nodePointer, key);
+        int leftChildPointer = entryService.readNodePointer(tapeID, this.pointerToPage(nodePointer), firstBiggerEntryNumber);
+        return this.findEntryInSubtree(tapeID, leftChildPointer, key);
     }
 
     public void updateEntry(UUID tapeID, Entry entry)
@@ -55,22 +142,58 @@ public class BTreeService {
 
     }
 
-    private void merge(UUID tapeID, int page1, int page2)
+    private void merge(UUID tapeID, int nodePointer1, int nodePointer2)
     {
 
     }
 
-    private void split(UUID tapeID, int page1, int page2)
+    private void split(UUID tapeID, int nodePointer1, int nodePointer2)
     {
 
     }
 
-    private void compensate(UUID tapeID, int page1, int page2)
+    private void compensate(UUID tapeID, int nodePointer1, int nodePointer2)
     {
 
     }
 
+    private int findFirstBiggerEntryNumber(UUID tapeID, int nodePointer, long key)
+    {
+        if(nodePointer == 0)
+            throw new IllegalStateException("Node pointer, in which entries were requested to be compared with provided key, was 0.");
 
+        int n = 0;
+        while(n < entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)))
+        {
+            Entry entry = entryService.readEntry(tapeID, this.pointerToPage(nodePointer), n);
+            if(key < entry.getKey())
+                return n;
+            n++;
+        }
+        throw new IllegalStateException("Something went wrong. The node pointer wasn't null pointer and the requested key" +
+                " was between this node min and max key, so bigger key than provided one should be found, but it wasn't");
+    }
+
+
+    /**
+     * Map page to node pointer. Adds 1, so pointer of value 0 couldn't exist and the value can be used as null pointer value.
+     * @param page
+     * @return
+     */
+    private int pageToPointer(int page)
+    {
+        return page + 1;
+    }
+
+    /**
+     * Map node pointer to page. Does the exact opposite to {@link BTreeService#pageToPointer} method (Decreases value by 1).
+     * @param pointer
+     * @return
+     */
+    private int pointerToPage(int pointer)
+    {
+        return pointer - 1;
+    }
 
 
 

@@ -45,7 +45,7 @@ public class EntryService {
 
         if(n < 0 || n >= this.getMaxEntries(buffer.length))
             throw new IllegalStateException("Requested entry number was below 0 or bigger than max entry number for this node." +
-                    " Entry couldn't be cleared.");
+                    " Entry couldn't be read. (it was "+n+" )");
 
         int pos = this.getEntryPosition(n);
         if(pos < 0 || pos > buffer.length - Entry.builder().build().getSize() - this.getNodePointerSize())

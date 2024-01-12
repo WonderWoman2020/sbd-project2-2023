@@ -1,11 +1,15 @@
 package app;
 
+import btree.service.BTreeService;
 import data_file.service.DataService;
 import data_generator.CommandGenerator;
 import data_generator.DataGenerator;
 import data_generator.FilesUtility;
 import database.service.DatabaseRawReader;
 import database.service.DatabaseService;
+import entry.converter.EntryConverter;
+import entry.entity.Entry;
+import entry.service.EntryService;
 import record.converter.RecordConverter;
 import record.entity.Record;
 import record.service.RecordService;
@@ -64,7 +68,7 @@ public class App
                 .filesUtility(new FilesUtility())
                 .filesPath(TAPES_PATH)
                 .filesBaseName("tape")
-                .BLOCK_SIZE(400)
+                .BLOCK_SIZE(2*10* Entry.builder().build().getSize() + (2*10 + 1)*4 + 4) // 2d * Entry size + (2d + 1) * Pointer size + 1 parent Pointer size
                 .build();
 
         RecordService recordService = RecordService.builder()
@@ -80,6 +84,19 @@ public class App
                 .recordService(recordService)
                 .build();
 
+        EntryService entryService = EntryService.builder()
+                .tapeService(tapeService)
+                .entryConverter(new EntryConverter())
+                .build();
+
+        BTreeService bTreeService = BTreeService.builder()
+                .entryService(entryService)
+                .d(10)
+                .h(0)
+                .lastSearchedNode(0)
+                .rootPage(0)
+                .build();
+
         UUID dataTapeID = UUID.randomUUID();
         UUID indexTapeID = UUID.randomUUID();
         tapeService.create(dataTapeID, false);
@@ -89,6 +106,7 @@ public class App
 
         DatabaseService databaseService = DatabaseService.builder()
                 .dataService(dataService)
+                .bTreeService(bTreeService)
                 .recordConverter(new RecordConverter())
                 .dataTapeID(dataTapeID)
                 .indexTapeID(indexTapeID)
@@ -130,6 +148,8 @@ public class App
                 command = input.readLine();
             }
             databaseRawReader.readData();
+            command = input.readLine();
+            System.out.println(databaseService.find(command));
         } catch (IOException | InvalidAlgorithmParameterException e) {
             throw new RuntimeException(e);
         }

@@ -1,6 +1,8 @@
 package database.service;
 
+import btree.service.BTreeService;
 import data_file.service.DataService;
+import entry.entity.Entry;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.ToString;
@@ -16,6 +18,8 @@ import java.util.UUID;
 public class DatabaseService {
 
     private DataService dataService;
+
+    private BTreeService bTreeService;
 
     private RecordConverter recordConverter;
 
@@ -51,6 +55,11 @@ public class DatabaseService {
 
         // TODO add here creating entry in B-tree index also
         int page = dataService.createRecord(this.dataTapeID, record);
+        Entry entry = Entry.builder()
+                .key(record.getKey())
+                .dataPage(page)
+                .build();
+        bTreeService.createEntry(this.indexTapeID, entry);
     }
     public Record find(String command)
     {
@@ -75,7 +84,13 @@ public class DatabaseService {
             throw new IllegalArgumentException("Record key parsing failed. Key must be a maximum 8-byte positive number.");
         }
         // TODO add here finding the key in B-tree and retrieving its page number
-        int page = 0;
+        Entry entry = bTreeService.findEntry(this.indexTapeID, key);
+        if(entry == null)
+        {
+            System.out.println("Entry with given key doesn't exist.");
+            return null;
+        }
+        int page = entry.getDataPage();
         return dataService.findRecord(this.dataTapeID, page, key);
     }
 
