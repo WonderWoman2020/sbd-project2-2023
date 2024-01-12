@@ -77,19 +77,15 @@ public class BTreeService {
     /**
      * Searches array of amounts of free space on each page of tape. Each tape has that array, and it needs to be updated.
      * @param tapeID
-     * @param record
-     * @return Returns page nr with enough space to write the entry on it, or -1, if all pages
+     * @return Returns page nr with enough space to write the node on it, or -1, if all pages
      * are full (or there is none yet) and new page needs to be added to tape.
      */
-    private int findSpaceForRecord(UUID tapeID, Record record)
+    private int findSpaceForNode(UUID tapeID)
     {
-        if(record == null)
-            throw new IllegalStateException("Record provided to find space for was null.");
-
         int page = 0;
         while(page < entryService.getTapePages(tapeID))
         {
-            if(record.getSize() <= entryService.getFreeSpaceOnPage(tapeID, page))
+            if(entryService.getFreeSpaceOnPage(tapeID, page) != 0) // Each node takes up full page, so it can be only full or empty
                 return page;
 
             page++;
@@ -104,10 +100,10 @@ public class BTreeService {
      * @param pageToLoad
      * @return Number of the buffered page, which lies in the tape furthest from the next page to load.
      */
-    // TODO change so root will never be freed, as it is used in every operation
     private int choosePageToFree(UUID tapeID, int pageToLoad)
     {
         Set<Integer> bufferedPages = entryService.getBufferedPages(tapeID);
+        bufferedPages.remove(this.rootPage); // Never free root page
         if(bufferedPages.isEmpty())
             throw new IllegalStateException("There was no buffered pages for this tape. There was no page to choose to be freed.");
 
