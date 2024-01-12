@@ -41,6 +41,7 @@ public class DataService {
             this.assureBufferForPage(tapeID, page);
 
         recordService.createRecord(tapeID, page, record);
+        recordService.setFreeSpaceOnPage(tapeID, page, recordService.getFreeSpaceOnPage(tapeID, page) - record.getSize());
         return page;
     }
 
@@ -59,6 +60,7 @@ public class DataService {
 
         this.assureBufferForPage(tapeID, page);
         recordService.updateRecord(tapeID, page, record);
+        // updating record doesn't change its free space amount, since in this project records are of constant size
     }
 
     public void deleteRecord(UUID tapeID, int page, long key) throws InvalidAlgorithmParameterException {
@@ -67,6 +69,8 @@ public class DataService {
 
         this.assureBufferForPage(tapeID, page);
         recordService.removeRecord(tapeID, page, key);
+        recordService.setFreeSpaceOnPage(tapeID, page, recordService.getFreeSpaceOnPage(tapeID, page)
+                + Record.builder().build().getSize());
     }
 
     /**
