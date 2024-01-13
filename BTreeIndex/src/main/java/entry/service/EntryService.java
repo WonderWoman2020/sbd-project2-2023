@@ -186,6 +186,18 @@ public class EntryService {
         return entries;
     }
 
+    /**
+     * Returns all node pointers, that can be non-null - all non-empty entries should have at least left node pointer, so
+     * this method returns entries number + 1 (the last entry right pointer may or may not point to something).
+     * @param tapeID
+     * @param page
+     * @return
+     */
+    public int getNodePointers(UUID tapeID, int page)
+    {
+        return this.getNodeEntries(tapeID, page) + 1;
+    }
+
     public int readNodePointer(UUID tapeID, int page, int n)
     {
         if(!tapeService.getBufferedPages(tapeID).contains(page) && tapeService.isMaxBuffers(tapeID))
@@ -236,6 +248,24 @@ public class EntryService {
         ByteBuffer.wrap(buffer, pos, this.getNodePointerSize()).putInt(pagePointer);
     }
 
+    /**
+     *
+     * @param tapeID
+     * @param page
+     * @param pagePointer
+     * @return Requested node pointer number or -1, if there was no pointer with this value.
+     */
+    public int findNodePointerNumber(UUID tapeID, int page, int pagePointer)
+    {
+        int n = 0;
+        while(n < this.getNodePointers(tapeID, page))
+        {
+            if(this.readNodePointer(tapeID, page, n) == pagePointer)
+                return n;
+            n++;
+        }
+        return -1;
+    }
     public int readNodeParentPointer(UUID tapeID, int page)
     {
         if(!tapeService.getBufferedPages(tapeID).contains(page) && tapeService.isMaxBuffers(tapeID))
@@ -289,6 +319,31 @@ public class EntryService {
             throw new IllegalStateException("Requested page should exist, but its data was null.");
 
         tapeService.writePage(tapeID, page, buffer, buffer.length);
+    }
+
+    /**
+     * Clears all node data except the header.
+     * @param tapeID
+     * @param page
+     */
+    public void clearNodeData(UUID tapeID, int page)
+    {
+        if(!tapeService.getBufferedPages(tapeID).contains(page) && tapeService.isMaxBuffers(tapeID))
+            throw new IllegalStateException("Saving requested node requires loading a page from tape, but the buffer" +
+                    " limit for this tape is full. Some buffer should have been freed before requesting this operation.");
+
+        if(page < 0)
+            throw new IllegalStateException("Page can't be a negative number.");
+
+        byte[] buffer = tapeService.readPage(tapeID, page);
+        if(buffer == null)
+            throw new IllegalStateException("Requested page should exist, but its data was null.");
+
+        if(buffer.length <= this.getNodeHeaderSize())
+            throw new IllegalStateException("The node buffer size was smaller than or equal to header." +
+                    " There was no node data to clear.");
+
+        Arrays.fill(buffer, this.getNodeHeaderSize(), buffer.length, (byte) 0);
     }
     private int getEntryPosition(int n)
     {
