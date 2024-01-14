@@ -58,19 +58,27 @@ public class BTreeService {
         int insertionNodePointer = this.lastSearchedNode;
         if(entryService.getNodeEntries(tapeID, this.pointerToPage(insertionNodePointer)) < (2 * this.d))
         {
-            this.insertEntry(tapeID, insertionNodePointer, entry);
+            this.insertEntry(tapeID, insertionNodePointer, entry, 0); // TODO pass here some pointer from createEntry()
             return;
         }
 
         // Try compensation
-        int whichSibling = this.whichSiblingForCompensation(tapeID, insertionNodePointer);
-        if(whichSibling != -1)
+        List<Integer> siblingsPointers = this.getSiblingsPointers(tapeID, insertionNodePointer);
+        if(siblingsPointers != null)
         {
-            this.compensate(tapeID, insertionNodePointer, whichSibling);
-            return;
+            if(this.canNodeCompensate(tapeID, siblingsPointers.get(0))) {
+                this.compensate(tapeID, insertionNodePointer, siblingsPointers.get(0), true);
+                return;
+            }
+            if(this.canNodeCompensate(tapeID, siblingsPointers.get(1))) {
+                this.compensate(tapeID, insertionNodePointer, siblingsPointers.get(1), false);
+                return;
+            }
+            if(siblingsPointers.get(0) == 0 && siblingsPointers.get(1) == 0)
+                throw new IllegalStateException("Something went wrong. This node has a parent, but it doesn't have any siblings," +
+                    " which shouldn't happen (there should be always at least 1 sibling).");
         }
-
-        // Split
+        // TODO Split here
 
     }
 
@@ -139,46 +147,63 @@ public class BTreeService {
 
     }
 
-    private void compensate(UUID tapeID, int nodePointer, int whichSibling)
-    {
-        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
-        int parentPointer = entryService.readNodeParentPointer(tapeID, this.pointerToPage(nodePointer)); // both nodes should have the same parent
+    private void compensate(UUID tapeID, int nodePointer, int siblingPointer, boolean leftSibling) throws InvalidAlgorithmParameterException {
+        // Read parent node pointer
+        this.assureBufferForPage(tapeID, this.pointerToPage(siblingPointer));
+        int parentPointer = entryService.readNodeParentPointer(tapeID, this.pointerToPage(siblingPointer)); // both nodes should have the same parent
         if(parentPointer == 0)
             throw new IllegalStateException("If compensation was confirmed as possible, then a parent node of provided" +
                     " nodes should exist, but it didn't.");
 
-        List<Entry> nodeEntries = this.readAllNodeEntries(tapeID, nodePointer);
-        List<Integer> nodePointers = this.readAllNodePointers(tapeID, nodePointer);
-
-        this.assureBufferForPage(tapeID, this.pointerToPage(parentPointer));
-        int childPointerNumber = entryService.findNodePointerNumber(tapeID, this.pointerToPage(parentPointer), nodePointer);
-        Entry parentEntry;
-        int siblingPointer = 0;
-        if(whichSibling == 1) { // Sibling is the left node
-            parentEntry = entryService.readEntry(tapeID, this.pointerToPage(parentPointer), childPointerNumber - 1);
-            siblingPointer = entryService.readNodePointer(tapeID, this.pointerToPage(parentPointer), childPointerNumber - 1);
-        }
-        else { // Sibling is the right node
-            parentEntry = entryService.readEntry(tapeID, this.pointerToPage(parentPointer), childPointerNumber);
-            siblingPointer = entryService.readNodePointer(tapeID, this.pointerToPage(parentPointer), childPointerNumber + 1);
-        }
-
-        this.assureBufferForPage(tapeID, this.pointerToPage(siblingPointer));
+        // Read all node entries and pointers from sibling
         List<Entry> siblingEntries = this.readAllNodeEntries(tapeID, siblingPointer);
         List<Integer> siblingPointers = this.readAllNodePointers(tapeID, siblingPointer);
 
+        // Read a parent node entry, which is between the nodePointer and its sibling pointer
+        this.assureBufferForPage(tapeID, this.pointerToPage(parentPointer));
+        int nodePointerNumber = entryService.findNodePointerNumber(tapeID, this.pointerToPage(parentPointer), nodePointer);
+        int parentEntryNumber = leftSibling ? nodePointerNumber - 1 : nodePointerNumber;
+        Entry parentEntry = entryService.readEntry(tapeID, this.pointerToPage(parentPointer), parentEntryNumber);
+
+        // Read all node entries and pointers from the insertion node
+        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+        List<Entry> nodeEntries = this.readAllNodeEntries(tapeID, nodePointer);
+        List<Integer> nodePointers = this.readAllNodePointers(tapeID, nodePointer);
+
+        // Get all entries and node pointers together, without changing their order which they have in nodes,
+        // and distribute them equally between nodes
         List<Entry> allEntries = new ArrayList<>();
         List<Integer> allPointers = new ArrayList<>();
-
-        allEntries.addAll((whichSibling == 1) ? siblingEntries : nodeEntries);
+        allEntries.addAll(leftSibling ? siblingEntries : nodeEntries);
         allEntries.add(parentEntry);
-        allEntries.addAll((whichSibling == 1) ? nodeEntries : siblingEntries);
-        allPointers.addAll((whichSibling == 1) ? siblingPointers : nodePointers);
-        allPointers.addAll((whichSibling == 1) ? nodePointers : siblingPointers);
+        allEntries.addAll(leftSibling ? nodeEntries : siblingEntries);
+        allPointers.addAll(leftSibling ? siblingPointers : nodePointers);
+        allPointers.addAll(leftSibling ? nodePointers : siblingPointers);
 
         int middleEntryNumber = allEntries.size() / 2;
-        // TODO distribute the entries and nodes
 
+        // Distribution in left node
+        int leftChildPointer = leftSibling ? siblingPointer : nodePointer;
+        this.assureBufferForPage(tapeID, this.pointerToPage(leftChildPointer));
+        for(int i = 0; i < middleEntryNumber; i++)
+            entryService.writeEntry(tapeID, this.pointerToPage(leftChildPointer), i, allEntries.get(i));
+        for(int i = 0; i < middleEntryNumber + 1; i++)
+            entryService.setNodePointer(tapeID, this.pointerToPage(leftChildPointer), i, allPointers.get(i));
+        entryService.saveNode(tapeID, leftChildPointer);
+
+        // Set parent entry (without modifying pointers)
+        this.assureBufferForPage(tapeID, this.pointerToPage(parentPointer));
+        entryService.writeEntry(tapeID, this.pointerToPage(parentPointer), parentEntryNumber, allEntries.get(middleEntryNumber));
+        entryService.saveNode(tapeID, parentPointer);
+
+        // Distribution in right node
+        int rightChildPointer = leftSibling ? nodePointer : siblingPointer;
+        this.assureBufferForPage(tapeID, this.pointerToPage(rightChildPointer));
+        for(int i = middleEntryNumber + 1; i < allEntries.size() ; i++)
+            entryService.writeEntry(tapeID, this.pointerToPage(rightChildPointer), i - (middleEntryNumber + 1), allEntries.get(i));
+        for(int i = middleEntryNumber + 1; i < allPointers.size(); i++)
+            entryService.setNodePointer(tapeID, this.pointerToPage(rightChildPointer), i - (middleEntryNumber + 1), allPointers.get(i));
+        entryService.saveNode(tapeID, rightChildPointer);
     }
 
     private List<Entry> readAllNodeEntries(UUID tapeID, int nodePointer)
@@ -209,74 +234,72 @@ public class BTreeService {
         return pointers;
     }
 
-    /**
-     *
-     * @param tapeID
-     * @param nodePointer
-     * @return 1 - if left sibling can be used,<br></br> 2 - if right sibling can be used,
-     * <br></br> -1 - if no sibling can be used
-     */
-    private int whichSiblingForCompensation(UUID tapeID, int nodePointer)
+    private boolean canNodeCompensate(UUID tapeID, int nodePointer)
+    {
+        if(nodePointer != 0) {
+            this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+            if(entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)) < (2 * this.d))
+                return true;
+        }
+        return false;
+    }
+
+    private List<Integer> getSiblingsPointers(UUID tapeID, int nodePointer)
     {
         this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
         int parentPointer = entryService.readNodeParentPointer(tapeID, this.pointerToPage(nodePointer));
-        if(parentPointer != 0) // If a node doesn't have a parent, then it is root, and it doesn't have siblings to compensate
+        if(parentPointer != 0) // If a node doesn't have a parent, then it is root, and it doesn't have siblings
         {
             this.assureBufferForPage(tapeID, this.pointerToPage(parentPointer));
             int childPointerNumber = entryService.findNodePointerNumber(tapeID, this.pointerToPage(parentPointer), nodePointer);
-            if(childPointerNumber == -1)
+            if (childPointerNumber == -1)
                 throw new IllegalStateException("This node should be a parent of some child node (according to the child header)," +
                         " but it didn't contain a pointer equal to the child pointer.");
 
             int leftSiblingPointer = 0;
             int rightSiblingPointer = 0;
-            if(childPointerNumber > 0) // Can have left sibling
+            if (childPointerNumber > 0) // Can have left sibling
                 leftSiblingPointer = entryService.readNodePointer(tapeID, this.pointerToPage(parentPointer), childPointerNumber - 1);
 
             if(childPointerNumber < entryService.getNodePointers(tapeID, this.pointerToPage(parentPointer)) - 1) // Can have right sibling
                 rightSiblingPointer = entryService.readNodePointer(tapeID, this.pointerToPage(parentPointer), childPointerNumber + 1);
 
-            if(leftSiblingPointer != 0) {
-                this.assureBufferForPage(tapeID, this.pointerToPage(leftSiblingPointer));
-                if(entryService.getNodeEntries(tapeID, this.pointerToPage(leftSiblingPointer)) < (2 * this.d))
-                    return 1;
-            }
-            if(rightSiblingPointer != 0)
-            {
-                this.assureBufferForPage(tapeID, this.pointerToPage(rightSiblingPointer));
-                if(entryService.getNodeEntries(tapeID, this.pointerToPage(rightSiblingPointer)) < (2 * this.d))
-                    return 2;
-            }
+            List<Integer> siblingsPointers = new ArrayList<>();
+            siblingsPointers.add(leftSiblingPointer);
+            siblingsPointers.add(rightSiblingPointer);
+            return siblingsPointers;
         }
-        return -1;
+        return null;
     }
 
-    private void insertEntry(UUID tapeID, int nodePointer, Entry entry) throws InvalidAlgorithmParameterException {
+    private void insertEntry(UUID tapeID, int nodePointer, Entry entry, int rightPointer) throws InvalidAlgorithmParameterException {
         if(nodePointer == 0)
             throw new IllegalStateException("Node pointer, to which was requested to insert an entry, was 0.");
+
+        if(entry == null)
+            throw new IllegalStateException("Entry provided to insert was null.");
 
         this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
         if(entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)) >= (2 * this.d))
             throw new IllegalStateException("Entry can't be inserted into a node, which is full of entries already.");
 
-        // Read all entries from the leaf node. As we should be in a leaf, node pointers can be omitted,
-        // because they should be null
+        // Read all entries and pointers from the node
         List<Entry> entries = this.readAllNodeEntries(tapeID, nodePointer);
-        Optional<Entry> firstBiggerEntry = entries.stream()
-                .filter(nodeEntry -> nodeEntry.getKey() > entry.getKey())
-                .min(Comparator.comparingLong(Entry::getKey));
-        if(firstBiggerEntry.isEmpty()) // There was no bigger key in this node, so this is the new biggest key entry
-        {
-            int newLastEntryNumber = entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer));
-            entryService.writeEntry(tapeID, this.pointerToPage(nodePointer), newLastEntryNumber, entry);
-        }
+        List<Integer> pointers = this.readAllNodePointers(tapeID, nodePointer);
+        int firstBiggerEntryNumber = this.findFirstBiggerEntryNumber(tapeID, nodePointer, entry.getKey());
+        int insertionEntryNumber;
+        if(firstBiggerEntryNumber == -1) // There was no bigger key in this node, so this is the new biggest key entry
+            insertionEntryNumber = entries.size();
         else
-        {
-            int biggerEntryNumber = entries.indexOf(firstBiggerEntry.get());
-            entries.add(biggerEntryNumber, entry);
-            for(int i = 0; i < entries.size(); i++) // Rewrite all node entries, so they will have order as in the list
-                entryService.writeEntry(tapeID, this.pointerToPage(nodePointer), i, entries.get(i));
-        }
+            insertionEntryNumber = firstBiggerEntryNumber;
+
+        entries.add(insertionEntryNumber, entry);
+        pointers.add(insertionEntryNumber + 1, rightPointer);
+        // Rewrite all node entries and pointers, so they will be ordered in the node as in the list
+        for(int i = 0; i < entries.size(); i++)
+            entryService.writeEntry(tapeID, this.pointerToPage(nodePointer), i, entries.get(i));
+        for(int i = 0; i < pointers.size(); i++)
+            entryService.setNodePointer(tapeID, this.pointerToPage(nodePointer), i, pointers.get(i));
         entryService.saveNode(tapeID, this.pointerToPage(nodePointer));
     }
 
@@ -304,7 +327,6 @@ public class BTreeService {
         return -1;
     }
 
-
     /**
      * Map page to node pointer. Adds 1, so pointer of value 0 couldn't exist and the value can be used as null pointer value.
      * @param page
@@ -324,8 +346,6 @@ public class BTreeService {
     {
         return pointer - 1;
     }
-
-
 
     /**
      * Searches array of amounts of free space on each page of tape. Each tape has that array, and it needs to be updated.
