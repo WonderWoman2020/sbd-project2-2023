@@ -54,11 +54,15 @@ public class BTreeService {
             return;
         }
 
+        this.createEntryNoSearching(tapeID, entry, 0);
+    }
+
+    private void createEntryNoSearching(UUID tapeID, Entry entry, int rightPointer) throws InvalidAlgorithmParameterException {
         // Insert on current page
         int insertionNodePointer = this.lastSearchedNode;
         if(entryService.getNodeEntries(tapeID, this.pointerToPage(insertionNodePointer)) < (2 * this.d))
         {
-            this.insertEntry(tapeID, insertionNodePointer, entry, 0); // TODO pass here some pointer from createEntry()
+            this.insertEntry(tapeID, insertionNodePointer, entry, rightPointer);
             return;
         }
 
@@ -67,19 +71,18 @@ public class BTreeService {
         if(siblingsPointers != null)
         {
             if(this.canNodeCompensate(tapeID, siblingsPointers.get(0))) {
-                this.compensate(tapeID, insertionNodePointer, siblingsPointers.get(0), true);
+                this.compensate(tapeID, insertionNodePointer, siblingsPointers.get(0), true, entry, rightPointer);
                 return;
             }
             if(this.canNodeCompensate(tapeID, siblingsPointers.get(1))) {
-                this.compensate(tapeID, insertionNodePointer, siblingsPointers.get(1), false);
+                this.compensate(tapeID, insertionNodePointer, siblingsPointers.get(1), false, entry, rightPointer);
                 return;
             }
             if(siblingsPointers.get(0) == 0 && siblingsPointers.get(1) == 0)
                 throw new IllegalStateException("Something went wrong. This node has a parent, but it doesn't have any siblings," +
-                    " which shouldn't happen (there should be always at least 1 sibling).");
+                        " which shouldn't happen (there should be always at least 1 sibling).");
         }
         // TODO Split here
-
     }
 
     public Entry findEntry(UUID tapeID, long key)
@@ -147,7 +150,8 @@ public class BTreeService {
 
     }
 
-    private void compensate(UUID tapeID, int nodePointer, int siblingPointer, boolean leftSibling) throws InvalidAlgorithmParameterException {
+    private void compensate(UUID tapeID, int nodePointer, int siblingPointer, boolean leftSibling, Entry entry, int rightPointer)
+            throws InvalidAlgorithmParameterException {
         // Read parent node pointer
         this.assureBufferForPage(tapeID, this.pointerToPage(siblingPointer));
         int parentPointer = entryService.readNodeParentPointer(tapeID, this.pointerToPage(siblingPointer)); // both nodes should have the same parent
@@ -179,6 +183,15 @@ public class BTreeService {
         allEntries.addAll(leftSibling ? nodeEntries : siblingEntries);
         allPointers.addAll(leftSibling ? siblingPointers : nodePointers);
         allPointers.addAll(leftSibling ? nodePointers : siblingPointers);
+
+        // Add to the list the entry, that is being inserted
+        Entry firstBiggerEntry = allEntries.stream()
+                .filter(nodeEntry -> nodeEntry.getKey() > entry.getKey())
+                .min(Comparator.comparingLong(Entry::getKey))
+                .get();
+        int firstBiggerEntryNumber = allEntries.indexOf(firstBiggerEntry);
+        allEntries.add(firstBiggerEntryNumber, entry);
+        allPointers.add(firstBiggerEntryNumber + 1, rightPointer);
 
         int middleEntryNumber = allEntries.size() / 2;
 
