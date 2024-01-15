@@ -122,7 +122,8 @@ public class BTreeService {
             return this.findEntryInSubtree(tapeID, rightChildPointer, key);
         }
 
-        int firstBiggerEntryNumber = this.findFirstBiggerEntryNumber(tapeID, nodePointer, key);
+        List<Entry> entries = this.readAllNodeEntries(tapeID, nodePointer);
+        int firstBiggerEntryNumber = this.findFirstBiggerEntryIndex(entries, key);
         if(firstBiggerEntryNumber == -1)
             throw new IllegalStateException("Something went wrong. The requested key was between this node min and max key," +
                     " so bigger key than provided one should be found, but it wasn't.");
@@ -185,23 +186,16 @@ public class BTreeService {
         allPointers.addAll(leftSibling ? nodePointers : siblingPointers);
 
         // Add to the list the entry, that is being inserted
-        Entry firstBiggerEntry = allEntries.stream()
-                .filter(nodeEntry -> nodeEntry.getKey() > entry.getKey())
-                .min(Comparator.comparingLong(Entry::getKey))
-                .get();
-        int firstBiggerEntryNumber = allEntries.indexOf(firstBiggerEntry);
-        allEntries.add(firstBiggerEntryNumber, entry);
-        allPointers.add(firstBiggerEntryNumber + 1, rightPointer);
+        int insertionEntryNumber = this.findEntryInsertionIndex(allEntries, entry);
+        allEntries.add(insertionEntryNumber, entry);
+        allPointers.add(insertionEntryNumber + 1, rightPointer);
 
         int middleEntryNumber = allEntries.size() / 2;
 
         // Distribution in left node
         int leftChildPointer = leftSibling ? siblingPointer : nodePointer;
         this.assureBufferForPage(tapeID, this.pointerToPage(leftChildPointer));
-        for(int i = 0; i < middleEntryNumber; i++)
-            entryService.writeEntry(tapeID, this.pointerToPage(leftChildPointer), i, allEntries.get(i));
-        for(int i = 0; i < middleEntryNumber + 1; i++)
-            entryService.setNodePointer(tapeID, this.pointerToPage(leftChildPointer), i, allPointers.get(i));
+        this.writeAllNodeData(tapeID, leftChildPointer, allEntries.subList(0, middleEntryNumber), allPointers.subList(0, middleEntryNumber + 1));
         entryService.saveNode(tapeID, leftChildPointer);
 
         // Set parent entry (without modifying pointers)
@@ -212,10 +206,8 @@ public class BTreeService {
         // Distribution in right node
         int rightChildPointer = leftSibling ? nodePointer : siblingPointer;
         this.assureBufferForPage(tapeID, this.pointerToPage(rightChildPointer));
-        for(int i = middleEntryNumber + 1; i < allEntries.size() ; i++)
-            entryService.writeEntry(tapeID, this.pointerToPage(rightChildPointer), i - (middleEntryNumber + 1), allEntries.get(i));
-        for(int i = middleEntryNumber + 1; i < allPointers.size(); i++)
-            entryService.setNodePointer(tapeID, this.pointerToPage(rightChildPointer), i - (middleEntryNumber + 1), allPointers.get(i));
+        this.writeAllNodeData(tapeID, rightChildPointer, allEntries.subList(middleEntryNumber + 1, allEntries.size()),
+                allPointers.subList(middleEntryNumber + 1, allPointers.size()));
         entryService.saveNode(tapeID, rightChildPointer);
     }
 
@@ -245,6 +237,16 @@ public class BTreeService {
             n++;
         }
         return pointers;
+    }
+
+    private void writeAllNodeData(UUID tapeID, int nodePointer, List<Entry> entries, List<Integer> pointers)
+    {
+        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+        entryService.clearNodeData(tapeID, this.pointerToPage(nodePointer));
+        for(int i = 0; i < entries.size(); i++)
+            entryService.writeEntry(tapeID, this.pointerToPage(nodePointer), i, entries.get(i));
+        for(int i = 0; i < pointers.size(); i++)
+            entryService.setNodePointer(tapeID, this.pointerToPage(nodePointer), i, pointers.get(i));
     }
 
     private boolean canNodeCompensate(UUID tapeID, int nodePointer)
@@ -299,13 +301,7 @@ public class BTreeService {
         // Read all entries and pointers from the node
         List<Entry> entries = this.readAllNodeEntries(tapeID, nodePointer);
         List<Integer> pointers = this.readAllNodePointers(tapeID, nodePointer);
-        int firstBiggerEntryNumber = this.findFirstBiggerEntryNumber(tapeID, nodePointer, entry.getKey());
-        int insertionEntryNumber;
-        if(firstBiggerEntryNumber == -1) // There was no bigger key in this node, so this is the new biggest key entry
-            insertionEntryNumber = entries.size();
-        else
-            insertionEntryNumber = firstBiggerEntryNumber;
-
+        int insertionEntryNumber = this.findEntryInsertionIndex(entries, entry);
         entries.add(insertionEntryNumber, entry);
         pointers.add(insertionEntryNumber + 1, rightPointer);
         // Rewrite all node entries and pointers, so they will be ordered in the node as in the list
@@ -316,28 +312,42 @@ public class BTreeService {
         entryService.saveNode(tapeID, this.pointerToPage(nodePointer));
     }
 
+    private int findEntryInsertionIndex(List<Entry> entries, Entry entry)
+    {
+        if(entries == null)
+            throw new IllegalStateException("Entries list provided to compare with some entry was null.");
+
+        if(entry == null)
+            throw new IllegalStateException("Entry provided to find its insert position was null.");
+
+        int firstBiggerEntryIndex = this.findFirstBiggerEntryIndex(entries, entry.getKey());
+        if(firstBiggerEntryIndex == -1) // There was no bigger key in this node, so this is the new biggest key entry
+            return entries.size();
+        else
+            return firstBiggerEntryIndex;
+    }
+
     /**
-     *
-     * @param tapeID
-     * @param nodePointer
+     * @param entries
      * @param key
      * @return First entry number, which had a bigger key than provided, or -1, if there was no bigger entry key in this node
      */
-    private int findFirstBiggerEntryNumber(UUID tapeID, int nodePointer, long key)
+    private int findFirstBiggerEntryIndex(List<Entry> entries, long key)
     {
-        if(nodePointer == 0)
-            throw new IllegalStateException("Node pointer, in which entries were requested to be compared with provided key, was 0.");
+        if(entries == null)
+            throw new IllegalStateException("Entries list provided to compare with some entry was null.");
 
-        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
-        int n = 0;
-        while(n < entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)))
-        {
-            Entry entry = entryService.readEntry(tapeID, this.pointerToPage(nodePointer), n);
-            if(key < entry.getKey())
-                return n;
-            n++;
-        }
-        return -1;
+        if(entries.isEmpty())
+            return -1;
+
+        Optional<Entry> firstBiggerEntry = entries.stream()
+                .filter(nodeEntry -> nodeEntry.getKey() > key)
+                .min(Comparator.comparingLong(Entry::getKey));
+
+        if(firstBiggerEntry.isEmpty())
+            return -1;
+
+        return entries.indexOf(firstBiggerEntry.get());
     }
 
     /**
