@@ -43,7 +43,7 @@ public class BTreeService {
             this.assureBufferForPage(tapeID, entryService.getTapePages(tapeID));
             entryService.addNextPage(tapeID);
             entryService.setFreeSpaceOnPage(tapeID, 0, 0); // Make this page taken by the first node
-            entryService.setNodeParentPointer(tapeID, 0, this.pageToPointer(0));
+            entryService.setNodeParentPointer(tapeID, 0, 0);
             this.rootPage = 0;
         }
 
@@ -60,6 +60,7 @@ public class BTreeService {
     private void createEntryNoSearching(UUID tapeID, Entry entry, int rightPointer) throws InvalidAlgorithmParameterException {
         // Insert on current page
         int insertionNodePointer = this.lastSearchedNode;
+        this.assureBufferForPage(tapeID, this.pointerToPage(insertionNodePointer));
         if(entryService.getNodeEntries(tapeID, this.pointerToPage(insertionNodePointer)) < (2 * this.d))
         {
             this.insertEntry(tapeID, insertionNodePointer, entry, rightPointer);
@@ -286,19 +287,19 @@ public class BTreeService {
         int leftChildPointer = leftSibling ? siblingPointer : nodePointer;
         this.assureBufferForPage(tapeID, this.pointerToPage(leftChildPointer));
         this.writeAllNodeData(tapeID, leftChildPointer, allEntries.subList(0, middleEntryNumber), allPointers.subList(0, middleEntryNumber + 1));
-        entryService.saveNode(tapeID, leftChildPointer);
+        entryService.saveNode(tapeID, this.pointerToPage(leftChildPointer));
 
         // Set parent entry (without modifying pointers)
         this.assureBufferForPage(tapeID, this.pointerToPage(parentPointer));
         entryService.writeEntry(tapeID, this.pointerToPage(parentPointer), parentEntryNumber, allEntries.get(middleEntryNumber));
-        entryService.saveNode(tapeID, parentPointer);
+        entryService.saveNode(tapeID, this.pointerToPage(parentPointer));
 
         // Distribution in right node
         int rightChildPointer = leftSibling ? nodePointer : siblingPointer;
         this.assureBufferForPage(tapeID, this.pointerToPage(rightChildPointer));
         this.writeAllNodeData(tapeID, rightChildPointer, allEntries.subList(middleEntryNumber + 1, allEntries.size()),
                 allPointers.subList(middleEntryNumber + 1, allPointers.size()));
-        entryService.saveNode(tapeID, rightChildPointer);
+        entryService.saveNode(tapeID, this.pointerToPage(rightChildPointer));
     }
 
     private List<Entry> readAllNodeEntries(UUID tapeID, int nodePointer)
@@ -489,7 +490,7 @@ public class BTreeService {
     private int choosePageToFree(UUID tapeID, int pageToLoad)
     {
         Set<Integer> bufferedPages = entryService.getBufferedPages(tapeID);
-        bufferedPages.remove(this.rootPage); // Never free root page
+        //bufferedPages.remove(this.rootPage); // Never free root page
         if(bufferedPages.isEmpty())
             throw new IllegalStateException("There was no buffered pages for this tape. There was no page to choose to be freed.");
 
