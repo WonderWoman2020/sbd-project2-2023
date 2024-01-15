@@ -36,6 +36,8 @@ public class App
     private static final String OUTPUT_PATH = "./output/";
     private static final String TAPES_PATH = "./tapes/";
 
+    private static final int d = 2;
+
     public static void main( String[] args )
     {
         System.out.println( "Hello World!" );
@@ -68,7 +70,7 @@ public class App
                 .filesUtility(new FilesUtility())
                 .filesPath(TAPES_PATH)
                 .filesBaseName("tape")
-                .BLOCK_SIZE(2*10* Entry.builder().build().getSize() + (2*10 + 1)*4 + 4) // 2d * Entry size + (2d + 1) * Pointer size + 1 parent Pointer size
+                .BLOCK_SIZE(2*d* Entry.builder().build().getSize() + (2*d + 1)*4 + 4) // 2d * Entry size + (2d + 1) * Pointer size + 1 parent Pointer size
                 .build();
 
         RecordService recordService = RecordService.builder()
@@ -91,7 +93,7 @@ public class App
 
         BTreeService bTreeService = BTreeService.builder()
                 .entryService(entryService)
-                .d(10)
+                .d(d)
                 .h(0)
                 .lastSearchedNode(0)
                 .rootPage(0)

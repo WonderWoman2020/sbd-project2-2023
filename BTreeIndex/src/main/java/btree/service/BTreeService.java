@@ -82,7 +82,7 @@ public class BTreeService {
                 throw new IllegalStateException("Something went wrong. This node has a parent, but it doesn't have any siblings," +
                         " which shouldn't happen (there should be always at least 1 sibling).");
         }
-        // TODO Split here
+        this.split(tapeID, insertionNodePointer, entry, rightPointer);
     }
 
     public Entry findEntry(UUID tapeID, long key)
@@ -146,9 +146,99 @@ public class BTreeService {
 
     }
 
-    private void split(UUID tapeID, int nodePointer1, int nodePointer2)
-    {
+    private void split(UUID tapeID, int nodePointer, Entry entry, int rightPointer) throws InvalidAlgorithmParameterException {
+        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+        int parentPointer = entryService.readNodeParentPointer(tapeID, this.pointerToPage(nodePointer));
 
+        List<Entry> entries = this.readAllNodeEntries(tapeID, nodePointer);
+        List<Integer> pointers = this.readAllNodePointers(tapeID, nodePointer);
+        int insertionEntryNumber = this.findEntryInsertionIndex(entries, entry);
+        entries.add(insertionEntryNumber, entry);
+        pointers.add(insertionEntryNumber + 1, rightPointer);
+
+        int middleEntryNumber = entries.size() / 2;
+
+        if(parentPointer != 0) {
+            // Distribution in original node, which would be now the left sibling
+            this.writeAllNodeData(tapeID, nodePointer, entries.subList(0, middleEntryNumber), pointers.subList(0, middleEntryNumber + 1));
+            entryService.saveNode(tapeID, this.pointerToPage(nodePointer));
+
+            // Create (or reuse empty) a new page for the new right sibling node
+            int page = this.findSpaceForNode(tapeID);
+            if (page == -1) {
+                page = entryService.getTapePages(tapeID);
+                this.assureBufferForPage(tapeID, page);
+                entryService.addNextPage(tapeID);
+            }
+            else
+                this.assureBufferForPage(tapeID, page);
+
+            entryService.setFreeSpaceOnPage(tapeID, page, 0); // Make this page taken by the node
+            entryService.setNodeParentPointer(tapeID, page, parentPointer);
+
+            // Distribution in the new right sibling node
+            this.writeAllNodeData(tapeID, this.pageToPointer(page), entries.subList(middleEntryNumber + 1, entries.size()),
+                    pointers.subList(middleEntryNumber + 1, pointers.size()));
+            entryService.saveNode(tapeID, page);
+
+            // Create an entry in parent, that consists of the middle entry and a pointer of new child node
+            this.lastSearchedNode = parentPointer;
+            this.createEntryNoSearching(tapeID, entries.get(middleEntryNumber), this.pageToPointer(page));
+        }
+        else
+        {
+            // Create (or re-use empty) a new page for the new root node
+            int pageForRoot = this.findSpaceForNode(tapeID);
+            if(pageForRoot == -1)
+            {
+                pageForRoot = entryService.getTapePages(tapeID);
+                this.assureBufferForPage(tapeID, pageForRoot);
+                entryService.addNextPage(tapeID);
+            }
+            else
+                this.assureBufferForPage(tapeID, pageForRoot);
+
+            entryService.setFreeSpaceOnPage(tapeID, pageForRoot, 0); // Make this page taken by the node
+            entryService.setNodeParentPointer(tapeID, pageForRoot, 0);
+            // Update b-tree info
+            this.rootPage = pageForRoot;
+            this.h++;
+            // Insert the middle entry (and both children pointers) in new root
+            entryService.setNodePointer(tapeID, pageForRoot, 0, nodePointer);
+            entryService.writeEntry(tapeID, pageForRoot, 0, entries.get(middleEntryNumber));
+
+            int rightChildPage = this.findSpaceForNode(tapeID);
+            if(rightChildPage == -1)
+                entryService.setNodePointer(tapeID, pageForRoot, 1, this.pageToPointer(entryService.getTapePages(tapeID)));
+            else
+                entryService.setNodePointer(tapeID, pageForRoot, 1, this.pageToPointer(rightChildPage));
+            entryService.saveNode(tapeID, pageForRoot);
+
+            // Create (or reuse) new page for right child node
+            if(rightChildPage == -1)
+            {
+                rightChildPage = entryService.getTapePages(tapeID);
+                this.assureBufferForPage(tapeID, rightChildPage);
+                entryService.addNextPage(tapeID);
+            }
+            else
+                this.assureBufferForPage(tapeID, rightChildPage);
+
+            entryService.setFreeSpaceOnPage(tapeID, rightChildPage, 0); // Make this page taken by the node
+            entryService.setNodeParentPointer(tapeID, rightChildPage, this.pageToPointer(pageForRoot));
+            // Distribution in the new right sibling node
+            this.writeAllNodeData(tapeID, this.pageToPointer(rightChildPage), entries.subList(middleEntryNumber + 1, entries.size()),
+                    pointers.subList(middleEntryNumber + 1, pointers.size()));
+            entryService.saveNode(tapeID, rightChildPage);
+
+            // Distribution in original node, which would be now the left sibling
+            this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+            entryService.setNodeParentPointer(tapeID, this.pointerToPage(nodePointer), this.pageToPointer(pageForRoot));
+            this.writeAllNodeData(tapeID, nodePointer, entries.subList(0, middleEntryNumber), pointers.subList(0, middleEntryNumber + 1));
+            entryService.saveNode(tapeID, this.pointerToPage(nodePointer));
+
+            this.lastSearchedNode = this.pageToPointer(pageForRoot);
+        }
     }
 
     private void compensate(UUID tapeID, int nodePointer, int siblingPointer, boolean leftSibling, Entry entry, int rightPointer)
