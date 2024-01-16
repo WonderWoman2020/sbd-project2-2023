@@ -53,13 +53,18 @@ public class DatabaseService {
         if(record == null)
             throw new IllegalArgumentException("Provided record data was bad syntax. Creating of the record aborted.");
 
-        // TODO add here creating entry in B-tree index also
+        Entry entry = bTreeService.findEntry(this.indexTapeID, record.getKey());
+        if(entry != null)
+        {
+            System.out.println("Entry with given key already exist.");
+            return;
+        }
         int page = dataService.createRecord(this.dataTapeID, record);
-        Entry entry = Entry.builder()
+        Entry entryToCreate = Entry.builder()
                 .key(record.getKey())
                 .dataPage(page)
                 .build();
-        bTreeService.createEntry(this.indexTapeID, entry);
+        bTreeService.createEntry(this.indexTapeID, entryToCreate);
     }
     public Record find(String command)
     {
@@ -83,7 +88,6 @@ public class DatabaseService {
             e.printStackTrace();
             throw new IllegalArgumentException("Record key parsing failed. Key must be a maximum 8-byte positive number.");
         }
-        // TODO add here finding the key in B-tree and retrieving its page number
         Entry entry = bTreeService.findEntry(this.indexTapeID, key);
         if(entry == null)
         {
@@ -111,9 +115,16 @@ public class DatabaseService {
         if(record == null)
             throw new IllegalArgumentException("Provided record data was bad syntax. Update of the record aborted.");
 
-        // TODO add here finding the key in B-tree and retrieving its page number
-        int page = 0;
+        Entry entry = bTreeService.findEntry(this.indexTapeID, record.getKey());
+        if(entry == null)
+        {
+            System.out.println("Entry with given key doesn't exist.");
+            return;
+        }
+        int page = entry.getDataPage();
         dataService.updateRecord(this.dataTapeID, page, record);
+        // Index file doesn't have anything to update in database update operation
+        // (updated record stays at the same page in data file and key doesn't change)
     }
 
     public void delete(String command) throws InvalidAlgorithmParameterException {
@@ -137,9 +148,16 @@ public class DatabaseService {
             e.printStackTrace();
             throw new IllegalArgumentException("Record key parsing failed. Key must be a maximum 8-byte positive number.");
         }
-        // TODO add here finding the key in B-tree and retrieving its page number
-        int page = 0;
+
+        Entry entry = bTreeService.findEntry(this.indexTapeID, key);
+        if(entry == null)
+        {
+            System.out.println("Entry with given key doesn't exist.");
+            return;
+        }
+        int page = entry.getDataPage();
         dataService.deleteRecord(this.dataTapeID, page, key);
+        bTreeService.deleteEntry(this.indexTapeID, key);
     }
     public void readAllRecords()
     {

@@ -156,6 +156,16 @@ public class App
             databaseRawReader.readIndex();
             command = input.readLine();
             System.out.println(databaseService.find(command));
+            command = input.readLine();
+            databaseService.delete(command);
+            databaseRawReader.readData();
+            System.out.println();
+            databaseRawReader.readIndex();
+            command = input.readLine();
+            databaseService.create(command);
+            databaseRawReader.readData();
+            System.out.println();
+            databaseRawReader.readIndex();
         } catch (IOException | InvalidAlgorithmParameterException e) {
             throw new RuntimeException(e);
         }

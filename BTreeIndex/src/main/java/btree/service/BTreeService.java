@@ -9,6 +9,7 @@ import lombok.ToString;
 
 import java.security.InvalidAlgorithmParameterException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Builder
 @ToString
@@ -33,7 +34,7 @@ public class BTreeService {
     private int rootPage;
 
     /**
-     * Saves node pointer that was checked as the last in findEntryInSubtree() method
+     * Saves node pointer that was checked as the last in findEntryInSubtree() and findBiggestEntryInSubtree() method
      */
     private int lastSearchedNode;
 
@@ -72,11 +73,11 @@ public class BTreeService {
         if(siblingsPointers != null)
         {
             if(this.canNodeCompensate(tapeID, siblingsPointers.get(0))) {
-                this.compensate(tapeID, insertionNodePointer, siblingsPointers.get(0), true, entry, rightPointer);
+                this.compensate(tapeID, insertionNodePointer, siblingsPointers.get(0), true, entry, rightPointer, true);
                 return;
             }
             if(this.canNodeCompensate(tapeID, siblingsPointers.get(1))) {
-                this.compensate(tapeID, insertionNodePointer, siblingsPointers.get(1), false, entry, rightPointer);
+                this.compensate(tapeID, insertionNodePointer, siblingsPointers.get(1), false, entry, rightPointer, true);
                 return;
             }
             if(siblingsPointers.get(0) == 0 && siblingsPointers.get(1) == 0)
@@ -94,6 +95,9 @@ public class BTreeService {
     public Entry findEntryInSubtree(UUID tapeID, int nodePointer, long key)
     {
         if(nodePointer == 0)
+            return null;
+
+        if(entryService.getTapePages(tapeID) == 0) // Index doesn't have any entries (possible only if there was not a single record created yet)
             return null;
 
         if(this.pointerToPage(nodePointer) < 0 || this.pointerToPage(nodePointer) >= entryService.getTapePages(tapeID))
@@ -132,13 +136,71 @@ public class BTreeService {
         return this.findEntryInSubtree(tapeID, leftChildPointer, key);
     }
 
-    public void updateEntry(UUID tapeID, Entry entry)
-    {
+    public void deleteEntry(UUID tapeID, long key) throws InvalidAlgorithmParameterException {
+        if(entryService.getTapePages(tapeID) == 0)
+        {
+            System.out.print("There are no entries in database yet. Requested entry cannot be removed.");
+            return;
+        }
 
-    }
+        Entry existingEntry = this.findEntry(tapeID, key);
+        if(existingEntry == null)
+        {
+            System.out.println("Entry with provided key doesn't exist. Deletion of the entry hasn't succeeded.");
+            return;
+        }
 
-    public void deleteEntry(UUID tapeID, long key)
-    {
+        int deletionNodePointer = this.lastSearchedNode;
+        this.assureBufferForPage(tapeID, this.pointerToPage(deletionNodePointer));
+        List<Entry> entries = this.readAllNodeEntries(tapeID, deletionNodePointer);
+        int deletionEntryNumber = entries.indexOf(existingEntry);
+        List<Integer> pointers = this.readAllNodePointers(tapeID, deletionNodePointer);
+        boolean isLeafNode = pointers.stream().filter(p -> p != 0).collect(Collectors.toList()).isEmpty();
+        if(!isLeafNode) // Replace entry in non-leaf node with the biggest entry from left subtree
+        {
+            Entry maxEntry = this.findBiggestEntryInSubtree(tapeID, pointers.get(deletionEntryNumber)); // left pointer for left subtree
+            this.assureBufferForPage(tapeID, this.pointerToPage(deletionNodePointer));
+            entryService.writeEntry(tapeID, this.pointerToPage(deletionNodePointer), deletionEntryNumber, maxEntry);
+            entryService.saveNode(tapeID, this.pointerToPage(deletionNodePointer));
+            // Update from which node the deletion will go on and deletion entry number in it
+            deletionNodePointer = this.lastSearchedNode;
+            this.assureBufferForPage(tapeID, this.pointerToPage(deletionNodePointer));
+            List<Entry> leafEntries = this.readAllNodeEntries(tapeID, deletionNodePointer);
+            deletionEntryNumber = leafEntries.indexOf(maxEntry);
+            existingEntry = maxEntry;
+        }
+
+        // Delete from leaf node
+        this.assureBufferForPage(tapeID, this.pointerToPage(deletionNodePointer));
+        if(entryService.getNodeEntries(tapeID, this.pointerToPage(deletionNodePointer)) > this.d)
+        {
+            List<Entry> leafEntries = this.readAllNodeEntries(tapeID, deletionNodePointer);
+            List<Integer> leafPointers = this.readAllNodePointers(tapeID, deletionNodePointer);
+            leafEntries.remove(deletionEntryNumber);
+            leafPointers.remove(deletionEntryNumber + 1);
+            this.writeAllNodeData(tapeID, deletionNodePointer, leafEntries, leafPointers);
+            entryService.saveNode(tapeID, this.pointerToPage(deletionNodePointer));
+            return;
+        }
+
+        // Try compensation
+        List<Integer> siblingsPointers = this.getSiblingsPointers(tapeID, deletionNodePointer);
+        if(siblingsPointers != null)
+        {
+            if(this.canNodeCompensate(tapeID, siblingsPointers.get(0))) {
+                this.compensate(tapeID, deletionNodePointer, siblingsPointers.get(0), true, existingEntry, 0, false);
+                return;
+            }
+            if(this.canNodeCompensate(tapeID, siblingsPointers.get(1))) {
+                this.compensate(tapeID, deletionNodePointer, siblingsPointers.get(1), false, existingEntry, 0, false);
+                return;
+            }
+            if(siblingsPointers.get(0) == 0 && siblingsPointers.get(1) == 0)
+                throw new IllegalStateException("Something went wrong. This node has a parent, but it doesn't have any siblings," +
+                        " which shouldn't happen (there should be always at least 1 sibling).");
+        }
+
+        // TODO merge
 
     }
 
@@ -242,7 +304,7 @@ public class BTreeService {
         }
     }
 
-    private void compensate(UUID tapeID, int nodePointer, int siblingPointer, boolean leftSibling, Entry entry, int rightPointer)
+    private void compensate(UUID tapeID, int nodePointer, int siblingPointer, boolean leftSibling, Entry entry, int rightPointer, boolean insertion)
             throws InvalidAlgorithmParameterException {
         // Read parent node pointer
         this.assureBufferForPage(tapeID, this.pointerToPage(siblingPointer));
@@ -277,9 +339,17 @@ public class BTreeService {
         allPointers.addAll(leftSibling ? nodePointers : siblingPointers);
 
         // Add to the list the entry, that is being inserted
-        int insertionEntryNumber = this.findEntryInsertionIndex(allEntries, entry);
-        allEntries.add(insertionEntryNumber, entry);
-        allPointers.add(insertionEntryNumber + 1, rightPointer);
+        if(insertion) {
+            int insertionEntryNumber = this.findEntryInsertionIndex(allEntries, entry);
+            allEntries.add(insertionEntryNumber, entry);
+            allPointers.add(insertionEntryNumber + 1, rightPointer);
+        }
+        else // or remove, if this is a compensation for delete operation
+        {
+            int deletionEntryNumber = allEntries.indexOf(entry);
+            allEntries.remove(deletionEntryNumber);
+            allPointers.remove(deletionEntryNumber + 1);
+        }
 
         int middleEntryNumber = allEntries.size() / 2;
 
@@ -338,6 +408,22 @@ public class BTreeService {
             entryService.writeEntry(tapeID, this.pointerToPage(nodePointer), i, entries.get(i));
         for(int i = 0; i < pointers.size(); i++)
             entryService.setNodePointer(tapeID, this.pointerToPage(nodePointer), i, pointers.get(i));
+    }
+
+    private Entry findBiggestEntryInSubtree(UUID tapeID, int nodePointer)
+    {
+        if(nodePointer == 0)
+            throw new IllegalStateException("Node pointer provided as a start of a subtree to search through was null.");
+
+        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+        List<Integer> pointers = this.readAllNodePointers(tapeID, nodePointer);
+        boolean isLeafNode = pointers.stream().filter(p -> p != 0).collect(Collectors.toList()).isEmpty();
+        if(!isLeafNode)
+            return this.findBiggestEntryInSubtree(tapeID, pointers.get(pointers.size() - 1));
+
+        this.lastSearchedNode = nodePointer;
+        int lastEntryNumber = entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)) - 1;
+        return entryService.readEntry(tapeID, this.pointerToPage(nodePointer), lastEntryNumber);
     }
 
     private boolean canNodeCompensate(UUID tapeID, int nodePointer)
