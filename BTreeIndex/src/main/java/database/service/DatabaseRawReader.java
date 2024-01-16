@@ -1,8 +1,11 @@
 package database.service;
 
+import btree.service.BTreeService;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.ToString;
+import node.converter.NodeConverter;
+import node.entity.Node;
 import record.converter.RecordConverter;
 import record.entity.Record;
 import tape.service.TapeService;
@@ -18,6 +21,8 @@ public class DatabaseRawReader {
     private TapeService tapeService;
 
     private RecordConverter recordConverter;
+
+    private NodeConverter nodeConverter;
 
     private UUID dataTapeID;
 
@@ -62,6 +67,60 @@ public class DatabaseRawReader {
         }
     }
 
+    public void readNextNode(int nodePointer, int level)
+    {
+        if(nodePointer == 0)
+            return;
+
+        if(this.pointerToPage(nodePointer) < 0)
+            throw new NoSuchElementException("Requested page was below 0 - that page doesn't exist.");
+
+        this.assureBufferForPage(indexTapeID, this.pointerToPage(nodePointer));
+        byte[] buffer = tapeService.readPage(indexTapeID, this.pointerToPage(nodePointer));
+        Node node = nodeConverter.bytesToNode(buffer);
+        String levelIndentation = " ".repeat(level*8);
+        String nodeDescription = "Lvl: "+level+", Page: "+this.pointerToPage(nodePointer)+", Node: "+nodePointer+" => ";
+        String nodeData = nodeConverter.nodeToString(node);
+        System.out.println(levelIndentation + nodeDescription + nodeData);
+        for(int i = 0; i < node.getChildPointers().size(); i++)
+            this.readNextNode(node.getChildPointers().get(i), level + 1);
+    }
+
+    public void readIndex()
+    {
+        int rootPage = this.findRootPage();
+        if(rootPage == -1) {
+            System.out.print("Root page of the database index file wasn't found. There are probably no entries in the database yet.");
+            return;
+        }
+        System.out.println("********************************** B-tree index **********************************");
+        this.readNextNode(this.pageToPointer(rootPage), 0);
+        System.out.println("******************************* End of B-tree index ******************************");
+    }
+
+    private int findRootPage()
+    {
+        int p = 0;
+        while(p < tapeService.getPages(indexTapeID))
+        {
+            this.assureBufferForPage(indexTapeID, p);
+            byte[] buffer = tapeService.readPage(indexTapeID, p);
+            Node node = nodeConverter.bytesToNode(buffer);
+            if(node.getParentPointer() == 0 && !node.getEntries().isEmpty())
+                return p;
+            p++;
+        }
+        return -1;
+    }
+
+    private int pageToPointer(int page)
+    {
+        return page + 1;
+    }
+    private int pointerToPage(int pointer)
+    {
+        return pointer - 1;
+    }
     private int choosePageToFree(UUID tapeID, int pageToLoad)
     {
         Set<Integer> bufferedPages = tapeService.getBufferedPages(tapeID);

@@ -10,6 +10,7 @@ import database.service.DatabaseService;
 import entry.converter.EntryConverter;
 import entry.entity.Entry;
 import entry.service.EntryService;
+import node.converter.NodeConverter;
 import record.converter.RecordConverter;
 import record.entity.Record;
 import record.service.RecordService;
@@ -137,6 +138,7 @@ public class App
         DatabaseRawReader databaseRawReader = DatabaseRawReader.builder()
                 .tapeService(tapeService)
                 .recordConverter(new RecordConverter())
+                .nodeConverter(new NodeConverter(new EntryConverter()))
                 .dataTapeID(dataTapeID)
                 .indexTapeID(indexTapeID)
                 .build();
@@ -150,6 +152,8 @@ public class App
                 command = input.readLine();
             }
             databaseRawReader.readData();
+            System.out.println();
+            databaseRawReader.readIndex();
             command = input.readLine();
             System.out.println(databaseService.find(command));
         } catch (IOException | InvalidAlgorithmParameterException e) {

@@ -160,9 +160,9 @@ public class NodeConverter {
         for(int i = 0; i<node.getChildPointers().size() - 1; i++)
         {
             nodeData.append(" ");
-            nodeData.append(node.getEntries().get(i).getKey());
+            nodeData.append(i < node.getEntries().size() ? node.getEntries().get(i).getKey() : 0);
             nodeData.append(" ");
-            nodeData.append(node.getEntries().get(i).getDataPage());
+            nodeData.append(i < node.getEntries().size() ? node.getEntries().get(i).getDataPage() : 0);
             nodeData.append(" |");
             nodeData.append(node.getChildPointers().get(i+1));
             nodeData.append("|");
