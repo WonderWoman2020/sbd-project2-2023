@@ -12,6 +12,8 @@ import tape.service.TapeService;
 
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Builder
 @ToString
@@ -67,7 +69,7 @@ public class DatabaseRawReader {
         }
     }
 
-    public void readNextNode(int nodePointer, int level)
+    public void readNextNode(int nodePointer, int level, List<Integer> readPages)
     {
         if(nodePointer == 0)
             return;
@@ -77,13 +79,14 @@ public class DatabaseRawReader {
 
         this.assureBufferForPage(indexTapeID, this.pointerToPage(nodePointer));
         byte[] buffer = tapeService.readPage(indexTapeID, this.pointerToPage(nodePointer));
+        readPages.add(this.pointerToPage(nodePointer));
         Node node = nodeConverter.bytesToNode(buffer);
         String levelIndentation = " ".repeat(level*8);
         String nodeDescription = "Lvl: "+level+", Page: "+this.pointerToPage(nodePointer)+", Node: "+nodePointer+" => ";
         String nodeData = nodeConverter.nodeToString(node);
         System.out.println(levelIndentation + nodeDescription + nodeData);
         for(int i = 0; i < node.getChildPointers().size(); i++)
-            this.readNextNode(node.getChildPointers().get(i), level + 1);
+            this.readNextNode(node.getChildPointers().get(i), level + 1, readPages);
     }
 
     public void readIndex()
@@ -93,9 +96,16 @@ public class DatabaseRawReader {
             System.out.print("Root page of the database index file wasn't found. There are probably no entries in the database yet.");
             return;
         }
+        List<Integer> readPages = new ArrayList<>();
         System.out.println("********************************** B-tree index **********************************");
-        this.readNextNode(this.pageToPointer(rootPage), 0);
+        this.readNextNode(this.pageToPointer(rootPage), 0, readPages);
         System.out.println("******************************* End of B-tree index ******************************");
+        List<Integer> allPages = IntStream.range(0, tapeService.getPages(indexTapeID)).boxed().collect(Collectors.toList());
+        allPages.removeAll(readPages);
+        if(allPages.isEmpty())
+            System.out.println("There were no empty pages in index file.");
+        else
+            System.out.println("Index file pages "+ allPages.stream().map(Object::toString).collect(Collectors.joining(", "))+" were empty.");
     }
 
     private int findRootPage()
