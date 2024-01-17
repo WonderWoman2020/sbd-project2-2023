@@ -38,6 +38,16 @@ public class BTreeService {
      */
     private int lastSearchedNode;
 
+    /**
+     * Last node visited during sequential read of the b-tree entries
+     */
+    private int sequentialReadLastNode;
+
+    /**
+     * Last child pointer number (equal to last entry number) read from the {@code sequentialReadLastNode}
+     */
+    private int sequentialReadChildToReadNumber;
+
     public void createEntry(UUID tapeID, Entry entry) throws InvalidAlgorithmParameterException {
         if(entryService.getTapePages(tapeID) == 0) // Add first index page, if it doesn't have any yet
         {
@@ -221,6 +231,63 @@ public class BTreeService {
         this.merge(tapeID, deletionNodePointer, 0, false, existingEntry);
     }
 
+    public Entry readNextEntry(UUID tapeID)
+    {
+        if(this.sequentialReadLastNode == 0) // Start reading, from root
+        {
+            this.assureBufferForPage(tapeID, this.rootPage);
+            //Entry entry = this.findSmallestEntryInSubtree(tapeID, this.pageToPointer(this.rootPage));
+            this.findSmallestEntryInSubtree(tapeID, this.pageToPointer(this.rootPage));
+            this.sequentialReadLastNode = this.lastSearchedNode;
+            this.sequentialReadChildToReadNumber = 0;
+            //return entry;
+        }
+
+        return this.readNextEntry(tapeID, this.sequentialReadLastNode, this.sequentialReadChildToReadNumber);
+    }
+
+    private Entry readNextEntry(UUID tapeID, int nodePointer, int childToRead)
+    {
+        if(nodePointer == 0)
+            return null;
+
+        this.sequentialReadLastNode = nodePointer;
+
+        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+
+        if(childToRead < entryService.getNodePointers(tapeID, this.pointerToPage(nodePointer)))
+        {
+            // Read right pointer of last read entry, to read all entries that are bigger than the entry and smaller than next entry in this node
+            int childPointer = entryService.readNodePointer(tapeID, this.pointerToPage(nodePointer), childToRead);
+            if(childPointer != 0)
+                return this.readNextEntry(tapeID, childPointer, 0);
+
+            this.sequentialReadChildToReadNumber = childToRead + 1;
+
+            if(childToRead < entryService.getNodePointers(tapeID, this.pointerToPage(nodePointer)) - 1) {
+                this.sequentialReadLastNode = nodePointer;
+                return entryService.readEntry(tapeID, this.pointerToPage(this.sequentialReadLastNode), childToRead);
+            }
+        }
+
+        int parentPointer = entryService.readNodeParentPointer(tapeID, this.pointerToPage(this.sequentialReadLastNode));
+        if(parentPointer == 0) // End of the b-tree
+            return null;
+        this.assureBufferForPage(tapeID, this.pointerToPage(parentPointer));
+        int readChildNumber = entryService.findNodePointerNumber(tapeID, this.pointerToPage(parentPointer), nodePointer);
+        this.sequentialReadChildToReadNumber = readChildNumber + 1;
+        if(readChildNumber < entryService.getNodePointers(tapeID, this.pointerToPage(parentPointer)) - 1) {
+            this.sequentialReadLastNode = parentPointer;
+            return entryService.readEntry(tapeID, this.pointerToPage(this.sequentialReadLastNode), readChildNumber);
+        }
+        return this.readNextEntry(tapeID, parentPointer, this.sequentialReadChildToReadNumber);
+    }
+
+    public void resetReadingBTree()
+    {
+        this.sequentialReadLastNode = 0;
+        this.sequentialReadChildToReadNumber = 0;
+    }
     private void merge(UUID tapeID, int nodePointer, int siblingPointer, boolean leftSibling, Entry deletionEntry) throws InvalidAlgorithmParameterException {
         if(nodePointer == 0)
             throw new IllegalStateException("Node pointer to merge was null.");
@@ -317,6 +384,8 @@ public class BTreeService {
             this.writeAllNodeData(tapeID, this.pageToPointer(page), entries.subList(middleEntryNumber + 1, entries.size()),
                     pointers.subList(middleEntryNumber + 1, pointers.size()));
             entryService.saveNode(tapeID, page);
+            // Update parent in all children, that were transferred to the new node
+            this.updateParentInChildren(tapeID, this.pageToPointer(page), this.pageToPointer(page));
 
             // Create an entry in parent, that consists of the middle entry and a pointer of new child node
             this.lastSearchedNode = parentPointer;
@@ -367,6 +436,8 @@ public class BTreeService {
             this.writeAllNodeData(tapeID, this.pageToPointer(rightChildPage), entries.subList(middleEntryNumber + 1, entries.size()),
                     pointers.subList(middleEntryNumber + 1, pointers.size()));
             entryService.saveNode(tapeID, rightChildPage);
+            // Update parent in all children, that were transferred to the new node
+            this.updateParentInChildren(tapeID, this.pageToPointer(rightChildPage), this.pageToPointer(rightChildPage));
 
             // Distribution in original node, which would be now the left sibling
             this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
@@ -520,6 +591,22 @@ public class BTreeService {
         this.lastSearchedNode = nodePointer;
         int lastEntryNumber = entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)) - 1;
         return entryService.readEntry(tapeID, this.pointerToPage(nodePointer), lastEntryNumber);
+    }
+
+    private Entry findSmallestEntryInSubtree(UUID tapeID, int nodePointer)
+    {
+        if(nodePointer == 0)
+            throw new IllegalStateException("Node pointer provided as a start of a subtree to search through was null.");
+
+        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+        List<Integer> pointers = this.readAllNodePointers(tapeID, nodePointer);
+        boolean isLeafNode = pointers.stream().filter(p -> p != 0).collect(Collectors.toList()).isEmpty();
+        if(!isLeafNode)
+            return this.findSmallestEntryInSubtree(tapeID, pointers.get(0));
+
+        this.lastSearchedNode = nodePointer;
+        int firstEntryNumber = 0;
+        return entryService.readEntry(tapeID, this.pointerToPage(nodePointer), firstEntryNumber);
     }
 
     private boolean canNodeCompensate(UUID tapeID, int nodePointer, boolean forOverflow)

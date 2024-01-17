@@ -161,11 +161,25 @@ public class DatabaseService {
     }
     public void readAllRecords()
     {
-
+        bTreeService.resetReadingBTree();
+        Entry entry = bTreeService.readNextEntry(indexTapeID);
+        while(entry != null)
+        {
+            System.out.println(dataService.findRecord(dataTapeID, entry.getDataPage(), entry.getKey()));
+            entry = bTreeService.readNextEntry(indexTapeID);
+        }
+        System.out.println("All records has been read.");
     }
 
     public void readAllEntries()
     {
-
+        bTreeService.resetReadingBTree();
+        Entry entry = bTreeService.readNextEntry(indexTapeID);
+        while(entry != null)
+        {
+            System.out.println(entry);
+            entry = bTreeService.readNextEntry(indexTapeID);
+        }
+        System.out.println("All entries has been read.");
     }
 }
