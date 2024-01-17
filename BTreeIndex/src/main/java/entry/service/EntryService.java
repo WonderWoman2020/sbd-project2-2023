@@ -378,13 +378,13 @@ public class EntryService {
         return this.getMaxEntries(bufferSize) + 1;
     }
 
-    private int getNodeHeaderSize()
+    public int getNodeHeaderSize()
     {
         // In header, there is stored a 4-byte parent pointer of the node
         return 4;
     }
 
-    private int getNodePointerSize()
+    public int getNodePointerSize()
     {
         // All pointers in a node are of a constant size of 4 bytes
         return 4;

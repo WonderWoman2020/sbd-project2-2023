@@ -72,11 +72,11 @@ public class BTreeService {
         List<Integer> siblingsPointers = this.getSiblingsPointers(tapeID, insertionNodePointer);
         if(siblingsPointers != null)
         {
-            if(this.canNodeCompensate(tapeID, siblingsPointers.get(0))) {
+            if(this.canNodeCompensate(tapeID, siblingsPointers.get(0), true)) {
                 this.compensate(tapeID, insertionNodePointer, siblingsPointers.get(0), true, entry, rightPointer, true);
                 return;
             }
-            if(this.canNodeCompensate(tapeID, siblingsPointers.get(1))) {
+            if(this.canNodeCompensate(tapeID, siblingsPointers.get(1), true)) {
                 this.compensate(tapeID, insertionNodePointer, siblingsPointers.get(1), false, entry, rightPointer, true);
                 return;
             }
@@ -170,9 +170,16 @@ public class BTreeService {
             existingEntry = maxEntry;
         }
 
-        // Delete from leaf node
+        this.deleteEntryNoReplacing(tapeID, deletionNodePointer, deletionEntryNumber, existingEntry);
+
+    }
+
+    private void deleteEntryNoReplacing(UUID tapeID, int deletionNodePointer, int deletionEntryNumber, Entry existingEntry) throws InvalidAlgorithmParameterException {
+        // Delete from node
         this.assureBufferForPage(tapeID, this.pointerToPage(deletionNodePointer));
-        if(entryService.getNodeEntries(tapeID, this.pointerToPage(deletionNodePointer)) > this.d)
+        int nodeEntriesCount = entryService.getNodeEntries(tapeID, this.pointerToPage(deletionNodePointer));
+        boolean isRootNode = (this.pointerToPage(deletionNodePointer) == this.rootPage);
+        if(nodeEntriesCount > this.d || (isRootNode && nodeEntriesCount > 1))
         {
             List<Entry> leafEntries = this.readAllNodeEntries(tapeID, deletionNodePointer);
             List<Integer> leafPointers = this.readAllNodePointers(tapeID, deletionNodePointer);
@@ -187,11 +194,11 @@ public class BTreeService {
         List<Integer> siblingsPointers = this.getSiblingsPointers(tapeID, deletionNodePointer);
         if(siblingsPointers != null)
         {
-            if(this.canNodeCompensate(tapeID, siblingsPointers.get(0))) {
+            if(this.canNodeCompensate(tapeID, siblingsPointers.get(0), false)) {
                 this.compensate(tapeID, deletionNodePointer, siblingsPointers.get(0), true, existingEntry, 0, false);
                 return;
             }
-            if(this.canNodeCompensate(tapeID, siblingsPointers.get(1))) {
+            if(this.canNodeCompensate(tapeID, siblingsPointers.get(1), false)) {
                 this.compensate(tapeID, deletionNodePointer, siblingsPointers.get(1), false, existingEntry, 0, false);
                 return;
             }
@@ -200,13 +207,80 @@ public class BTreeService {
                         " which shouldn't happen (there should be always at least 1 sibling).");
         }
 
-        // TODO merge
-
+        // Perform merge
+        if(siblingsPointers != null) {
+            if(siblingsPointers.get(0) != 0) {
+                this.merge(tapeID, deletionNodePointer, siblingsPointers.get(0), true, existingEntry);
+            }
+            else {
+                this.merge(tapeID, deletionNodePointer, siblingsPointers.get(1), false, existingEntry);
+            }
+            return;
+        }
+        // No siblings -> root merge
+        this.merge(tapeID, deletionNodePointer, 0, false, existingEntry);
     }
 
-    private void merge(UUID tapeID, int nodePointer1, int nodePointer2)
-    {
+    private void merge(UUID tapeID, int nodePointer, int siblingPointer, boolean leftSibling, Entry deletionEntry) throws InvalidAlgorithmParameterException {
+        if(nodePointer == 0)
+            throw new IllegalStateException("Node pointer to merge was null.");
 
+        if(siblingPointer == 0) // Root merge -> delete root page, set new root
+        {
+            this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+            int onlyChildPointer = entryService.readNodePointer(tapeID, this.pointerToPage(nodePointer), 0); // Left pointer of the one left entry
+            this.updateParentInChildren(tapeID, nodePointer, 0); // This updates parent in the single child, that will be the new root
+            this.clearNodePage(tapeID, nodePointer);
+            // Update b-tree info
+            if(onlyChildPointer == 0) // It can occur, if root was the only node and all records have been deleted
+                this.rootPage = 0; // In this situation all pages are empty, so we can just set root again to first page of the index file
+            else
+                this.rootPage = this.pointerToPage(onlyChildPointer);
+            this.h--;
+            return;
+        }
+
+        // There is a sibling to merge
+        // Read data from sibling
+        this.assureBufferForPage(tapeID, this.pointerToPage(siblingPointer));
+        List<Entry> siblingEntries = this.readAllNodeEntries(tapeID, siblingPointer);
+        List<Integer> siblingPointers = this.readAllNodePointers(tapeID, siblingPointer);
+
+        // Read data from the merged node
+        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+        List<Entry> nodeEntries = this.readAllNodeEntries(tapeID, nodePointer);
+        List<Integer> nodePointers = this.readAllNodePointers(tapeID, nodePointer);
+        int parentPointer = entryService.readNodeParentPointer(tapeID, this.pointerToPage(nodePointer));
+
+        // Read a parent node entry, which is between the nodePointer and its sibling pointer
+        this.assureBufferForPage(tapeID, this.pointerToPage(parentPointer));
+        int nodePointerNumber = entryService.findNodePointerNumber(tapeID, this.pointerToPage(parentPointer), nodePointer);
+        int parentEntryNumber = leftSibling ? nodePointerNumber - 1 : nodePointerNumber;
+        Entry parentEntry = entryService.readEntry(tapeID, this.pointerToPage(parentPointer), parentEntryNumber);
+
+        // Remove the entry, which is being deleted (and because of which there was going to be an underflow in the merged node)
+        int deletionEntryNumber = nodeEntries.indexOf(deletionEntry);
+        nodeEntries.remove(deletionEntryNumber);
+        nodePointers.remove(deletionEntryNumber + 1); // entry right pointer
+        // Add all entries and pointers to common list (with parent entry from between the child node pointers also)
+        List<Entry> allEntries = new ArrayList<>();
+        List<Integer> allPointers = new ArrayList<>();
+        allEntries.addAll(leftSibling ? siblingEntries : nodeEntries);
+        allEntries.add(parentEntry);
+        allEntries.addAll(leftSibling ? nodeEntries : siblingEntries);
+        allPointers.addAll(leftSibling ? siblingPointers : nodePointers);
+        allPointers.addAll(leftSibling ? nodePointers : siblingPointers);
+
+        // Update parent in all children headers of the right node, that is going to be deleted
+        this.updateParentInChildren(tapeID, leftSibling ? nodePointer : siblingPointer, leftSibling ? siblingPointer : nodePointer);
+        // Delete the right child node
+        this.clearNodePage(tapeID, leftSibling ? nodePointer : siblingPointer);
+        // Save all entries in left child node
+        this.assureBufferForPage(tapeID, this.pointerToPage(leftSibling ? siblingPointer : nodePointer));
+        this.writeAllNodeData(tapeID, leftSibling ? siblingPointer : nodePointer, allEntries, allPointers);
+        entryService.saveNode(tapeID, this.pointerToPage(leftSibling ? siblingPointer : nodePointer));
+        // Delete the parent entry, that was inserted in the merged node, from parent
+        this.deleteEntryNoReplacing(tapeID, parentPointer, parentEntryNumber, parentEntry);
     }
 
     private void split(UUID tapeID, int nodePointer, Entry entry, int rightPointer) throws InvalidAlgorithmParameterException {
@@ -410,6 +484,28 @@ public class BTreeService {
             entryService.setNodePointer(tapeID, this.pointerToPage(nodePointer), i, pointers.get(i));
     }
 
+    private void updateParentInChildren(UUID tapeID, int nodePointer, int parentPointer) throws InvalidAlgorithmParameterException {
+        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+        List<Integer> pointers = this.readAllNodePointers(tapeID, nodePointer);
+        for (Integer childPointer : pointers) {
+            if (childPointer == 0)
+                continue;
+            this.assureBufferForPage(tapeID, this.pointerToPage(childPointer));
+            entryService.setNodeParentPointer(tapeID, this.pointerToPage(childPointer), parentPointer);
+            entryService.saveNode(tapeID, this.pointerToPage(childPointer));
+        }
+    }
+    private void clearNodePage(UUID tapeID, int nodePointer) throws InvalidAlgorithmParameterException {
+        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+        // Clear the node page and mark it as free page for future nodes
+        entryService.clearNodeData(tapeID, this.pointerToPage(nodePointer));
+        entryService.setNodeParentPointer(tapeID, this.pointerToPage(nodePointer), 0);
+        entryService.setFreeSpaceOnPage(tapeID, this.pointerToPage(nodePointer), this.calculateNodeSize());
+        // Save cleared page
+        entryService.saveNode(tapeID, this.pointerToPage(nodePointer));
+        // Free the page block from memory, as it doesn't contain any node data for now
+        entryService.freeBufferedBlock(tapeID, this.pointerToPage(nodePointer));
+    }
     private Entry findBiggestEntryInSubtree(UUID tapeID, int nodePointer)
     {
         if(nodePointer == 0)
@@ -426,13 +522,18 @@ public class BTreeService {
         return entryService.readEntry(tapeID, this.pointerToPage(nodePointer), lastEntryNumber);
     }
 
-    private boolean canNodeCompensate(UUID tapeID, int nodePointer)
+    private boolean canNodeCompensate(UUID tapeID, int nodePointer, boolean forOverflow)
     {
-        if(nodePointer != 0) {
-            this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
-            if(entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)) < (2 * this.d))
-                return true;
-        }
+        if(nodePointer == 0)
+            return false;
+
+        this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
+        if(forOverflow && entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)) < (2 * this.d))
+            return true;
+
+        if(!forOverflow && entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)) > this.d)
+            return true;
+
         return false;
     }
 
@@ -525,6 +626,12 @@ public class BTreeService {
             return -1;
 
         return entries.indexOf(firstBiggerEntry.get());
+    }
+
+    private int calculateNodeSize()
+    {
+        return entryService.getNodeHeaderSize() + entryService.getNodePointerSize()
+                + 2 * this.d * (Entry.builder().build().getSize() + entryService.getNodePointerSize());
     }
 
     /**
