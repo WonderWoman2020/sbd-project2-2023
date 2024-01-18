@@ -233,6 +233,12 @@ public class BTreeService {
 
     public Entry readNextEntry(UUID tapeID)
     {
+        if(entryService.getTapePages(tapeID) == 0)
+        {
+            System.out.println("Index file has no pages to read yet.");
+            return null;
+        }
+
         if(this.sequentialReadLastNode == 0) // Start reading, from root
         {
             this.assureBufferForPage(tapeID, this.rootPage);

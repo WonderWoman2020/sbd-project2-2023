@@ -63,6 +63,13 @@ public class DatabaseRawReader {
     public void readData()
     {
         int page = 0;
+
+        if(tapeService.getPages(dataTapeID) == 0)
+        {
+            System.out.println("Data file has no pages to read yet.");
+            return;
+        }
+
         while(page < tapeService.getPages(dataTapeID)) {
             this.readDataPage(page);
             page++;

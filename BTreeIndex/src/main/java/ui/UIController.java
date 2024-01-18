@@ -75,7 +75,7 @@ public class UIController {
             String command = input.readLine();
 
             if(command == null) {
-                System.out.print("Bad command syntax.");
+                System.out.println("Bad command syntax.");
                 continue;
             }
 
@@ -106,7 +106,7 @@ public class UIController {
             }
 
 
-            System.out.print("Bad command syntax.");
+            System.out.println("Bad command syntax.");
         }
     }
 
@@ -125,7 +125,7 @@ public class UIController {
             {
                 System.out.println(line);
                 if(line.length() < 2)
-                    System.out.print("Bad command syntax.");
+                    System.out.println("Bad command syntax.");
                 else
                     this.chooseDatabaseCommand(line);
 
@@ -211,7 +211,7 @@ public class UIController {
                             databaseRawReader.readIndex();
                             break;
                         default:
-                            System.out.print("Bad command syntax in command: "+command);
+                            System.out.println("Bad command syntax in command: "+command);
                             break;
                     }
                     break;
@@ -222,12 +222,12 @@ public class UIController {
                     databaseService.delete(command);
                     break;
                 default:
-                    System.out.print("Bad command syntax in command: "+command);
+                    System.out.println("Bad command syntax in command: "+command);
                     break;
             }
         } catch (IllegalArgumentException e)
         {
-            System.out.print("Bad command syntax in command: "+command);
+            System.out.println("Bad command syntax in command: "+command);
             e.printStackTrace();
         }
     }
