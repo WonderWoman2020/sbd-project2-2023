@@ -26,7 +26,7 @@ public class DataGenerator {
         // TODO change to no boundary at the end of the job
         // Temporarily set 100 as a boundary, for simpler math calculations while developing app
         return Record.builder()
-                .key(rand.nextLong())
+                .key(rand.nextInt(1000000)) // TODO change to long
                 .mass(rand.nextInt(100))
                 .speed(rand.nextInt(100))
                 .build();

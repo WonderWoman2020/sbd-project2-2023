@@ -93,7 +93,7 @@ public class DatabaseRawReader {
     {
         int rootPage = this.findRootPage();
         if(rootPage == -1) {
-            System.out.print("Root page of the database index file wasn't found. There are probably no entries in the database yet.");
+            System.out.println("Root page of the database index file wasn't found. There are probably no entries in the database yet.");
             return;
         }
         List<Integer> readPages = new ArrayList<>();
