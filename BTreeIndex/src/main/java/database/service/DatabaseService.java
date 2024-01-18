@@ -53,6 +53,9 @@ public class DatabaseService {
         if(record == null)
             throw new IllegalArgumentException("Provided record data was bad syntax. Creating of the record aborted.");
 
+        if(record.getKey() <= 0)
+            throw new IllegalArgumentException("Provided record key was below or equal to 0. Key must be an 8-byte positive number.");
+
         Entry entry = bTreeService.findEntry(this.indexTapeID, record.getKey());
         if(entry != null)
         {
@@ -88,6 +91,10 @@ public class DatabaseService {
             e.printStackTrace();
             throw new IllegalArgumentException("Record key parsing failed. Key must be a maximum 8-byte positive number.");
         }
+
+        if(key <= 0)
+            throw new IllegalArgumentException("Provided record key was below or equal to 0. Key must be an 8-byte positive number.");
+
         Entry entry = bTreeService.findEntry(this.indexTapeID, key);
         if(entry == null)
         {
@@ -114,6 +121,9 @@ public class DatabaseService {
         Record record = recordConverter.stringToRecord(recordData);
         if(record == null)
             throw new IllegalArgumentException("Provided record data was bad syntax. Update of the record aborted.");
+
+        if(record.getKey() <= 0)
+            throw new IllegalArgumentException("Provided record key was below or equal to 0. Key must be an 8-byte positive number.");
 
         Entry entry = bTreeService.findEntry(this.indexTapeID, record.getKey());
         if(entry == null)
@@ -148,6 +158,9 @@ public class DatabaseService {
             e.printStackTrace();
             throw new IllegalArgumentException("Record key parsing failed. Key must be a maximum 8-byte positive number.");
         }
+
+        if(key <= 0)
+            throw new IllegalArgumentException("Provided record key was below or equal to 0. Key must be an 8-byte positive number.");
 
         Entry entry = bTreeService.findEntry(this.indexTapeID, key);
         if(entry == null)

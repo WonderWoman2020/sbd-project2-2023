@@ -669,6 +669,9 @@ public class BTreeService {
         if(entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)) >= (2 * this.d))
             throw new IllegalStateException("Entry can't be inserted into a node, which is full of entries already.");
 
+        if(entryService.getNodeEntries(tapeID, this.pointerToPage(nodePointer)) == 0) // Inserting first entry in the node (possible with root node)
+            entryService.setFreeSpaceOnPage(tapeID, this.pointerToPage(nodePointer), 0); // Make this page taken by the node
+
         // Read all entries and pointers from the node
         List<Entry> entries = this.readAllNodeEntries(tapeID, nodePointer);
         List<Integer> pointers = this.readAllNodePointers(tapeID, nodePointer);
