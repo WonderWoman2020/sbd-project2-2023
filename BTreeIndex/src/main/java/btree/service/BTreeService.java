@@ -5,6 +5,7 @@ import entry.entity.Entry;
 import entry.service.EntryService;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Getter;
 import lombok.ToString;
 
 import java.security.InvalidAlgorithmParameterException;
@@ -47,6 +48,24 @@ public class BTreeService {
      * Last child pointer number (equal to last entry number) read from the {@code sequentialReadLastNode}
      */
     private int sequentialReadChildToReadNumber;
+
+    /**
+     * Counter of merge operations done.
+     */
+    @Getter
+    private int merges;
+
+    /**
+     * Counter of split operations done.
+     */
+    @Getter
+    private int splits;
+
+    /**
+     * Counter of compensation operations done.
+     */
+    @Getter
+    private int compensations;
 
     public void createEntry(UUID tapeID, Entry entry) throws InvalidAlgorithmParameterException {
         if(entryService.getTapePages(tapeID) == 0) // Add first index page, if it doesn't have any yet
@@ -310,6 +329,10 @@ public class BTreeService {
             else
                 this.rootPage = this.pointerToPage(onlyChildPointer);
             this.h--;
+
+            // Update merge counter for statistics analysis
+            this.merges++;
+
             return;
         }
 
@@ -352,6 +375,10 @@ public class BTreeService {
         this.assureBufferForPage(tapeID, this.pointerToPage(leftSibling ? siblingPointer : nodePointer));
         this.writeAllNodeData(tapeID, leftSibling ? siblingPointer : nodePointer, allEntries, allPointers);
         entryService.saveNode(tapeID, this.pointerToPage(leftSibling ? siblingPointer : nodePointer));
+
+        // Update merge counter for statistics analysis
+        this.merges++;
+
         // Delete the parent entry, that was inserted in the merged node, from parent
         this.deleteEntryNoReplacing(tapeID, parentPointer, parentEntryNumber, parentEntry);
     }
@@ -392,6 +419,9 @@ public class BTreeService {
             entryService.saveNode(tapeID, page);
             // Update parent in all children, that were transferred to the new node
             this.updateParentInChildren(tapeID, this.pageToPointer(page), this.pageToPointer(page));
+
+            // Update split counter for statistics analysis
+            this.splits++;
 
             // Create an entry in parent, that consists of the middle entry and a pointer of new child node
             this.lastSearchedNode = parentPointer;
@@ -452,6 +482,9 @@ public class BTreeService {
             entryService.saveNode(tapeID, this.pointerToPage(nodePointer));
 
             this.lastSearchedNode = this.pageToPointer(pageForRoot);
+
+            // Update split counter for statistics analysis
+            this.splits++;
         }
     }
 
@@ -521,8 +554,30 @@ public class BTreeService {
         this.writeAllNodeData(tapeID, rightChildPointer, allEntries.subList(middleEntryNumber + 1, allEntries.size()),
                 allPointers.subList(middleEntryNumber + 1, allPointers.size()));
         entryService.saveNode(tapeID, this.pointerToPage(rightChildPointer));
+
+        // Update compensation counter for statistics analysis
+        this.compensations++;
     }
 
+    public int getReads(UUID tapeID)
+    {
+        return entryService.getReads(tapeID);
+    }
+
+    public int getWrites(UUID tapeID)
+    {
+        return entryService.getWrites(tapeID);
+    }
+
+    public int getTapePages(UUID tapeID)
+    {
+        return entryService.getTapePages(tapeID);
+    }
+
+    public int getTapeFreePages(UUID tapeID)
+    {
+        return entryService.getTapeFreePages(tapeID);
+    }
     private List<Entry> readAllNodeEntries(UUID tapeID, int nodePointer)
     {
         this.assureBufferForPage(tapeID, this.pointerToPage(nodePointer));
@@ -724,7 +779,7 @@ public class BTreeService {
         return entries.indexOf(firstBiggerEntry.get());
     }
 
-    private int calculateNodeSize()
+    public int calculateNodeSize()
     {
         return entryService.getNodeHeaderSize() + entryService.getNodePointerSize()
                 + 2 * this.d * (Entry.builder().build().getSize() + entryService.getNodePointerSize());

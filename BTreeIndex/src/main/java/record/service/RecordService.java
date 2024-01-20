@@ -454,6 +454,11 @@ public class RecordService {
         return tapeService.getPages(id);
     }
 
+    public int getTapeFreePages(UUID id)
+    {
+        return tapeService.getFreePages(id);
+    }
+
     public void addNextPage(UUID tapeID)
     {
         tapeService.addNextPage(tapeID);

@@ -608,6 +608,24 @@ public class TapeService {
         return tape.getFreeSpaceOnEachPage().size();
     }
 
+    public int getFreePages(UUID id)
+    {
+        Tape tape = this.tapes.get(id);
+        if(tape == null)
+            throw new NoSuchElementException();
+
+        int page = 0;
+        int freePages = 0;
+        while(page < this.getPages(id))
+        {
+            if(this.getFreeSpaceOnPage(id, page) == this.BLOCK_SIZE)
+                freePages++;
+
+            page++;
+        }
+        return freePages;
+    }
+
     /**
      * New page size is assumed to be the equal to {@link TapeService#BLOCK_SIZE} and as it is a new page, free
      * space is set to its size. New page is also added to buffer. <strong>Attention:</strong>

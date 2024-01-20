@@ -28,8 +28,6 @@ public class Statistics {
 
     private int compensations;
 
-    private int unCompensations;
-
     private int tapeWrites;
 
     private int tapeReads;

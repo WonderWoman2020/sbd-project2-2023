@@ -73,6 +73,26 @@ public class DataService {
                 + Record.builder().build().getSize());
     }
 
+    public int getReads(UUID tapeID)
+    {
+        return recordService.getReads(tapeID);
+    }
+
+    public int getWrites(UUID tapeID)
+    {
+        return recordService.getWrites(tapeID);
+    }
+
+    public int getTapePages(UUID tapeID)
+    {
+        return recordService.getTapePages(tapeID);
+    }
+
+    public int getTapeFreePages(UUID tapeID)
+    {
+        return recordService.getTapeFreePages(tapeID);
+    }
+
     /**
      * Searches array of amounts of free space on each page of tape. Each tape has that array, and it needs to be updated.
      * @param tapeID
