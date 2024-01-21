@@ -7,8 +7,12 @@ import lombok.Builder;
 import lombok.ToString;
 import statistics.entity.Statistics;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 @Builder
 @ToString
@@ -65,23 +69,11 @@ public class StatisticsService {
                     .tapeWrites(dataService.getWrites(tapeID))
                     .build();
 
-        return null;
+        throw new IllegalArgumentException("Provided tape ID wasn't equal to any of index tape ID or data tape ID for this database." +
+                " This database consists from only these 2 tapes, so it doesn't have to know anything correctly about other tapes.");
     }
 
-    public Statistics calculateOperationStats(Statistics before, Statistics after)
-    {
-        return Statistics.builder()
-                .operation(after.getOperation())
-                .type(after.getType())
-                .merges(after.getMerges() - before.getMerges())
-                .splits(after.getSplits() - before.getSplits())
-                .compensations(after.getCompensations() - before.getCompensations())
-                .tapeReads(after.getTapeReads() - before.getTapeReads())
-                .tapeWrites(after.getTapeWrites() - before.getTapeWrites())
-                .build();
-    }
-
-    public void setOperationStats(UUID tapeID, Statistics stats, int number)
+    public void setOperationStats(UUID tapeID, int number, Statistics stats)
     {
         if(tapeID == indexTapeID) {
             this.indexStatistics.put(number, stats);
@@ -109,6 +101,53 @@ public class StatisticsService {
                 " Operations statistics for tapes other than these 2 are not being stored.");
     }
 
+    public Statistics getSummedStats(UUID tapeID, String type)
+    {
+        if(tapeID == indexTapeID)
+            return this.indexStatistics.values().stream()
+                    .filter(stat -> type.equals(stat.getType()))
+                    .reduce(Statistics.builder().build(), this::addStats);
+        
+        if(tapeID == dataTapeID)
+            return this.dataFileStatistics.values().stream()
+                    .filter(stat -> type.equals(stat.getType()))
+                    .reduce(Statistics.builder().build(), this::addStats);
+
+        throw new IllegalArgumentException("Provided tape ID wasn't equal to any of index tape ID or data tape ID for this database." +
+                " Operations statistics for tapes other than these 2 are not being stored.");
+    }
+
+    public List<Statistics> getAllSummedStats(UUID tapeID)
+    {
+        List<String> types = this.getStatsTypes(tapeID);
+        List<Statistics> stats = new ArrayList<>();
+        for(String type : types) {
+            Statistics singleTypeStats = this.getSummedStats(tapeID, type);
+            singleTypeStats.setOperation(this.getOperations(tapeID, type));
+            stats.add(singleTypeStats);
+        }
+
+        return stats;
+    }
+
+    public List<String> getStatsTypes(UUID tapeID)
+    {
+        if(tapeID == indexTapeID)
+            return this.indexStatistics.values().stream()
+                    .map(Statistics::getType)
+                    .distinct()
+                    .collect(Collectors.toList());
+
+        if(tapeID == dataTapeID)
+            return this.dataFileStatistics.values().stream()
+                    .map(Statistics::getType)
+                    .distinct()
+                    .collect(Collectors.toList());
+
+        throw new IllegalArgumentException("Provided tape ID wasn't equal to any of index tape ID or data tape ID for this database." +
+                " Operations statistics for tapes other than these 2 are not being stored.");
+    }
+
     public int getOperations(UUID tapeID)
     {
         if(tapeID == indexTapeID)
@@ -120,7 +159,47 @@ public class StatisticsService {
         throw new IllegalArgumentException("Provided tape ID wasn't equal to any of index tape ID or data tape ID for this database." +
                 " Operations statistics for tapes other than these 2 are not being stored.");
     }
+    public int getOperations(UUID tapeID, String type)
+    {
+        if(tapeID == indexTapeID)
+            return (int) this.indexStatistics.values().stream()
+                    .filter(stat -> type.equals(stat.getType()))
+                    .count();
 
+        if(tapeID == dataTapeID)
+            return (int) this.dataFileStatistics.values().stream()
+                    .filter(stat -> type.equals(stat.getType()))
+                    .count();
+
+        throw new IllegalArgumentException("Provided tape ID wasn't equal to any of index tape ID or data tape ID for this database." +
+                " Operations statistics for tapes other than these 2 are not being stored.");
+    }
+
+    public Statistics addStats(Statistics left, Statistics right)
+    {
+        return Statistics.builder()
+                .operation(right.getOperation())
+                .type(right.getType())
+                .merges(left.getMerges() + right.getMerges())
+                .splits(left.getSplits() + right.getSplits())
+                .compensations(left.getCompensations() + right.getCompensations())
+                .tapeReads(left.getTapeReads() + right.getTapeReads())
+                .tapeWrites(left.getTapeWrites() + right.getTapeWrites())
+                .build();
+    }
+
+    public Statistics subtractStats(Statistics left, Statistics right)
+    {
+        return Statistics.builder()
+                .operation(left.getOperation())
+                .type(left.getType())
+                .merges(left.getMerges() - right.getMerges())
+                .splits(left.getSplits() - right.getSplits())
+                .compensations(left.getCompensations() - right.getCompensations())
+                .tapeReads(left.getTapeReads() - right.getTapeReads())
+                .tapeWrites(left.getTapeWrites() - right.getTapeWrites())
+                .build();
+    }
     public int getTapePages(UUID tapeID)
     {
         if(tapeID == indexTapeID)

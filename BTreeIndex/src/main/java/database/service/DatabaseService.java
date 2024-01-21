@@ -5,6 +5,7 @@ import data_file.service.DataService;
 import entry.entity.Entry;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Getter;
 import lombok.ToString;
 import record.converter.RecordConverter;
 import record.entity.Record;
@@ -27,12 +28,14 @@ public class DatabaseService {
      * In theory, TapeService could manage many tapes for different databases, so every DatabaseService should know
      * of which tapes its database consists.
      */
+    @Getter
     private UUID dataTapeID;
 
     /**
      * In theory, TapeService could manage many tapes for different databases, so every DatabaseService should know
      * of which tapes its database consists.
      */
+    @Getter
     private UUID indexTapeID;
 
     // TODO add read and write stats measurer before and after each operation

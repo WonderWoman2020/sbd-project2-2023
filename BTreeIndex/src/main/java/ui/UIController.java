@@ -16,12 +16,15 @@ import node.converter.NodeConverter;
 import record.converter.RecordConverter;
 import record.entity.Record;
 import record.service.RecordService;
+import statistics.entity.Statistics;
+import statistics.service.StatisticsService;
 import tape.service.TapeService;
 
 import java.io.*;
 import java.nio.file.Path;
 import java.security.InvalidAlgorithmParameterException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
 
 @Builder
@@ -38,6 +41,8 @@ public class UIController {
      * specific pages.
      */
     private DatabaseRawReader databaseRawReader;
+
+    private StatisticsService statisticsService;
 
     /**
      * Object to manage user files.
@@ -156,13 +161,25 @@ public class UIController {
                 continue;
             }
 
-            if(command.length() < 2) {
+            if(command.length() < 2 && !command.equals("S")) {
                 System.out.println("Bad command syntax.");
                 command = input.readLine();
                 continue;
             }
 
             this.chooseDatabaseCommand(command);
+
+            // Show operation statistics
+            if(!command.equals("S")) {
+                int lastOperation = statisticsService.getOperations(databaseService.getIndexTapeID());
+                Statistics indexOperationStats = statisticsService.getOperationStats(databaseService.getIndexTapeID(), lastOperation);
+                Statistics dataOperationStats = statisticsService.getOperationStats(databaseService.getDataTapeID(), lastOperation);
+                System.out.println("\nStatistics of last operation: ");
+                System.out.println("For: INDEX FILE\n" + indexOperationStats);
+                System.out.println("For: DATA FILE\n" + dataOperationStats);
+                System.out.println();
+            }
+
             command = input.readLine();
         }
     }
@@ -180,16 +197,22 @@ public class UIController {
         menuText.append("RE                          (Read all index Entries in order)\n");
         menuText.append("RD                          (Read Data file pages)\n");
         menuText.append("RI                          (Read Index file pages)\n");
+        menuText.append("S                           (Show all operations statistics)\n");
         menuText.append("Other commands: menu (to show this menu again), exit (to leave)\n");
 
         return String.valueOf(menuText);
     }
     private void chooseDatabaseCommand(String command) throws InvalidAlgorithmParameterException {
+        Statistics indexStateBefore = statisticsService.getCurrentState(databaseService.getIndexTapeID());
+        Statistics dataStateBefore = statisticsService.getCurrentState(databaseService.getDataTapeID());
+        String operationType = null;
+        int operationNumber = statisticsService.getOperations(databaseService.getIndexTapeID()) + 1; // Operation number is the same for index and data tape
         try {
             char firstLetter = command.charAt(0);
             switch (firstLetter) {
                 case 'C':
                     databaseService.create(command);
+                    operationType = "CREATE";
                     break;
                 case 'R':
                     char secondLetter = command.charAt(1);
@@ -197,18 +220,23 @@ public class UIController {
                     {
                         case ' ':
                             System.out.println(databaseService.find(command));
+                            operationType = "READ";
                             break;
                         case 'A':
                             databaseService.readAllRecords();
+                            operationType = "READ ALL";
                             break;
                         case 'E':
                             databaseService.readAllEntries();
+                            operationType = "READ ENTRIES";
                             break;
                         case 'D':
                             databaseRawReader.readData();
+                            operationType = "READ DATA";
                             break;
                         case 'I':
                             databaseRawReader.readIndex();
+                            operationType = "READ INDEX";
                             break;
                         default:
                             System.out.println("Bad command syntax in command: "+command);
@@ -217,14 +245,59 @@ public class UIController {
                     break;
                 case 'U':
                     databaseService.update(command);
+                    operationType = "UPDATE";
                     break;
                 case 'D':
                     databaseService.delete(command);
+                    operationType = "DELETE";
+                    break;
+                case 'S':
+                    List<Statistics> indexStats = statisticsService.getAllSummedStats(databaseService.getIndexTapeID());
+                    List<Statistics> dataStats = statisticsService.getAllSummedStats(databaseService.getDataTapeID());
+                    List<String> types = statisticsService.getStatsTypes(databaseService.getIndexTapeID());
+                    System.out.println("\nSummed statistics by operation types: ");
+                    for(String type : types)
+                    {
+                        Statistics dataSum = dataStats.stream()
+                                .filter(stats -> type.equals(stats.getType()))
+                                .findFirst().orElse(null);
+
+                        Statistics indexSum = indexStats.stream()
+                            .filter(stats -> type.equals(stats.getType()))
+                            .findFirst().orElse(null);
+
+                        System.out.println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
+                        System.out.println("Operation type: "+type);
+                        System.out.println("For: INDEX FILE\n"+indexSum);
+                        System.out.println("For: DATA FILE\n"+dataSum);
+                    }
+                    System.out.println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^");
+                    System.out.println("All statistics has been shown.");
+                    System.out.println("Index file pages count: "+statisticsService.getTapePages(databaseService.getIndexTapeID())
+                    +", with free pages: "+statisticsService.getTapeFreePages(databaseService.getIndexTapeID()));
+                    System.out.println("Data file pages count: "+statisticsService.getTapePages(databaseService.getDataTapeID())
+                    + ", with free pages: "+statisticsService.getTapeFreePages(databaseService.getDataTapeID()));
                     break;
                 default:
                     System.out.println("Bad command syntax in command: "+command);
                     break;
             }
+
+            // Save operation statistics
+            if(operationType != null)
+            {
+                Statistics indexStateAfter = statisticsService.getCurrentState(databaseService.getIndexTapeID());
+                Statistics dataStateAfter = statisticsService.getCurrentState(databaseService.getDataTapeID());
+                Statistics indexOperationStats = statisticsService.subtractStats(indexStateAfter, indexStateBefore);
+                Statistics dataOperationStats = statisticsService.subtractStats(dataStateAfter, dataStateBefore);
+                indexOperationStats.setOperation(operationNumber);
+                indexOperationStats.setType(operationType);
+                dataOperationStats.setOperation(operationNumber);
+                dataOperationStats.setType(operationType);
+                statisticsService.setOperationStats(databaseService.getIndexTapeID(), operationNumber, indexOperationStats);
+                statisticsService.setOperationStats(databaseService.getDataTapeID(), operationNumber, dataOperationStats);
+            }
+
         } catch (IllegalArgumentException e)
         {
             System.out.println("Bad command syntax in command: "+command);
@@ -363,6 +436,17 @@ public class UIController {
 
         this.commandGenerator = commandGenerator;
         this.filesUtility = new FilesUtility();
+
+        StatisticsService statisticsService = StatisticsService.builder()
+                .dataService(dataService)
+                .bTreeService(bTreeService)
+                .dataTapeID(dataTapeID)
+                .indexTapeID(indexTapeID)
+                .dataFileStatistics(new HashMap<>())
+                .indexStatistics(new HashMap<>())
+                .build();
+
+        this.statisticsService = statisticsService;
     }
     private void cleanUpAppFiles(String tapesPath)
     {

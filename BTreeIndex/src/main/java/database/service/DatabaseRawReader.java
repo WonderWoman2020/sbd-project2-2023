@@ -3,6 +3,7 @@ package database.service;
 import btree.service.BTreeService;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Getter;
 import lombok.ToString;
 import node.converter.NodeConverter;
 import node.entity.Node;
@@ -26,8 +27,10 @@ public class DatabaseRawReader {
 
     private NodeConverter nodeConverter;
 
+    @Getter
     private UUID dataTapeID;
 
+    @Getter
     private UUID indexTapeID;
 
     public void readDataPage(int page)
