@@ -555,6 +555,10 @@ public class BTreeService {
                 allPointers.subList(middleEntryNumber + 1, allPointers.size()));
         entryService.saveNode(tapeID, this.pointerToPage(rightChildPointer));
 
+        // Update parent in all children, that were transferred to new node
+        this.updateParentInChildren(tapeID, leftChildPointer, leftChildPointer);
+        this.updateParentInChildren(tapeID, rightChildPointer, rightChildPointer);
+
         // Update compensation counter for statistics analysis
         this.compensations++;
     }
