@@ -51,11 +51,11 @@ Now let's see how records from the data file are printed. We can:
 1. Just see all the records printed in order of their keys,
 2. Or explore data alignment of the data file and print raw byte data.
 
-1. Records printed in order of their keys:
+Records printed in order of their keys:
 
 ![Data file records](./docs/ui_ra.png)
 	
-2. Contents of the data file printed raw, as its data is aligned at the disk:
+Contents of the data file printed raw, as its data is aligned at the disk:
 
 ![Data file contents](./docs/ui_rd.png)
 
