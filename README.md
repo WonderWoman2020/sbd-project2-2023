@@ -6,7 +6,7 @@
 2. [Who may find it useful](#who-may-find-it-useful)
 3. [How B-Tree and data is presented](#how-b---tree-and-data-is-presented)
 4. [How to run](#how-to-run)
-5. [Input commands and parameters](#input-commands)
+5. [Input commands and parameters](#input-commands-and-parameters)
 6. [Index and data files structure](#index-and-data-file-structure)
 7. [Memory management](#memory-management)
 
@@ -35,7 +35,7 @@ Here is an example of how B-Tree structure is printed by the app:
 
 Each node takes up 1 line in the window. In this line is printed all the information needed about the node:
 - `Lvl` - node's level in the tree. Level '0' is root and it increments down the tree. As it can be seen, levels are also marked by an indentation, for better readability of the B-Tree structure.
-- `Page` - page number in the index file, on which the node is stored. Page number is location in the file, which can be calculated by page_number * page_size. Page_size depends on one of the input parameters and will be explained later.
+- `Page` - page number in the index file, on which the node is stored. Page number is location in the file, which can be calculated by page_number * page_size. Page_size depends on one of the input parameters and will be explained later [here](#input-commands-and-parameters).
 - `Node` - node's number, which is just page_number + 1. It is shifted by one just to reserve '0' as a special value for node pointer, that means null pointer.
 - `=>` - after the arrow, the contents of the node are described:
     - `H 2 H` - between two letters 'H' there is a header of the node. Header contains pointer on the parent node. In this example, number 2 is the parent node number of one of the nodes.
@@ -58,3 +58,23 @@ Contents of the data file printed raw, as its data is aligned at the disk:
 Records printed in order of their keys:
 
 ![Data file records](./docs/ui_ra.png)
+
+## How to run
+
+The project is a standard Java project with only Lombok dependency added. You can run it in IntellijIdea and make use of existing `.idea` configurations or run it in your favourite IDE (some additional startup configuration might be needed). To run in IntellijIdea, just open the `BTreeIndex` folder and press Shift + F10.
+
+## Input commands and parameters
+
+Input commands are quite straightforward and are also described in the app menu itself:
+
+![Input commands](./docs/ui_3.png)
+
+As for parameters, user can input:
+
+![Input parameters](./docs/ui_1.png)
+
+The parameter descriptions:
+- `Path for database files` - it's just a location in which the index and data file will be stored and managed. You can stay with the `./tapes/` option.
+- `Data file buffers number` - the index and data file are read in blocks, so only 'n' number of pages is loaded in memory at a time. Buffer equals one page. You can change the setting if you want to see how it will affect disk reads and writes statistics. This setting is for data file buffers number.
+- `Index file buffers number` - same as previous, just for index file buffers number.
+- `B-tree degree` - it is the most important parameter. The degree is the minimum number of entries that a node has to contain (except for root) to not be merged with some other underflown node. Maximum number of entries is degree * 2. This parameter dictates the size of the node - it also affects the page_size, as it is assumed in this app, that one node takes up exactly one disk page. You can calculate node size (and page size) with the formula: header_size + n * entry_size + (n+1) * child_pointer_size, where n = degree * 2 (sizes: header_size - 4 bytes, entry_size - 12 bytes, child_pointer_size - 4 bytes).
