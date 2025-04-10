@@ -61,13 +61,17 @@ Records printed in order of their keys:
 
 ## How to run
 
-The project is a standard Java project with only Lombok dependency added. You can run it in IntellijIdea and make use of existing `.idea` configurations or run it in your favourite IDE (some additional startup configuration might be needed). To run in IntellijIdea, just open the `BTreeIndex` directory and press Shift + F10.
+The project is a standard Java project with only Lombok dependency added. You can run it in IntellijIdea and make use of existing `.idea` configurations or run it in your favourite IDE (although some additional startup configuration might be needed). To run in IntellijIdea, just open the `BTreeIndex` directory and press Shift + F10.
 
 ## Input commands and parameters
 
 Input commands are quite straightforward and are also described in the app menu itself:
 
 ![Input commands](./docs/ui_3.png)
+
+You can also generate or write a file containing a sequence of input commands, for faster testing :)
+
+![Input files option](./docs/ui_2.png)
 
 As for parameters, user can input:
 
@@ -79,6 +83,25 @@ The parameter descriptions:
 - `Index file buffers number` - same as previous, just for index file buffers number.
 - `B-tree degree` - it is the most important parameter. The degree is the minimum number of entries that a node has to contain (except for root) to not be merged with some other underflown node. Maximum number of entries is degree * 2. This parameter dictates the size of the node - it also affects the page_size, as it is assumed in this app, that one node takes up exactly one disk page. You can calculate node size (and page size) with the formula: header_size + n * entry_size + (n+1) * child_pointer_size, where n = degree * 2 (sizes: header_size - 4 bytes, entry_size - 12 bytes, child_pointer_size - 4 bytes).
 
+At last, you can also see the reads and writes statistics after executing some commands on the database structure. You can also analyze B-Tree special operations counts, like `merge`, `split`, and `compensate` (summed up underflow and overflow compensations):
+
+![Statistics](./docs/ui_s.png)
+
 ## Index and data files structure
 
-Work in progress, will be updated soon!
+Both index and data files are stored as binary files with `.dat` extension. You can't read them as text, because they're not written as strings, but just as a binary numbers representing the node and records data, node by node, record by record. However, you can decode them in the app, with `RI` and `RD` commands.
+
+The files memory layout on disk is organized page by page - and the page size, as mentioned before, is dependent on and equal to a single B-Tree node size. Records are written as a whole and must fit in one page, there is no dividing records between 2 pages - that means that there might be some empty bytes at the end of each data file page. This mechanism was selected to avoid unnecesary additional page reads and writes, when creating or deleting a record, and for the statistics of these operations to be easier to analyze too.
+
+Another thing worth mentioning is what happens to the files layout, when records are deleted.
+
+1. When a record is deleted, the page in data file containing it is loaded into memory. The space for the record is emptied and the records that were after it are being shifted to the left to overwrite it - thanks to that, free space on this page is always only at the end of it, after its last record. 
+2. What happens in the index file is similar, the entries are rewritten so that only at the end of the node there are empty places for new ones. Here might also happen some special operations from B-Tree as `merge` or `compensate` - first deletes one of the underflown nodes (node containing less than degree number of entries) and merges it with another, which leaves one empty page in the index file. The second one only rewrites some entries between 2 nodes, so each of them contains at least a minimum number of entries.
+
+**Author's note:** In project, the files are reffered to as tapes, but in reality that name doesn't matter here - I had other project for the class, where it was important that the files had been read sequentially and we had to think about them as to be similar to reading a tape. Here they're random access though, so the name doesn't work now :P
+
+## Memory management
+
+The files are loaded to memory with use of buffers - we assume a database would be a large file and it might even not fit in the RAM memory. So it is read with only few pages loaded at a time, to ensure constant space complexity (constant memory usage), regardless of the database file size. User can choose how much buffers can be read at a time from both of the files and how big the page is.
+
+The buffers freeing mechanism is simple - if a page we want to retrieve isn't already loaded and a buffer is full, one page, that is the furthest in the file from the one we try to load, is released.
