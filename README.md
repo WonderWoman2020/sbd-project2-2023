@@ -61,7 +61,7 @@ Records printed in order of their keys:
 
 ## How to run
 
-The project is a standard Java project with only Lombok dependency added. You can run it in IntellijIdea and make use of existing `.idea` configurations or run it in your favourite IDE (some additional startup configuration might be needed). To run in IntellijIdea, just open the `BTreeIndex` folder and press Shift + F10.
+The project is a standard Java project with only Lombok dependency added. You can run it in IntellijIdea and make use of existing `.idea` configurations or run it in your favourite IDE (some additional startup configuration might be needed). To run in IntellijIdea, just open the `BTreeIndex` directory and press Shift + F10.
 
 ## Input commands and parameters
 
