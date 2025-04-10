@@ -7,7 +7,7 @@
 3. [How B-Tree and data is presented](#how-b-tree-and-data-is-presented)
 4. [How to run](#how-to-run)
 5. [Input commands and parameters](#input-commands-and-parameters)
-6. [Index and data files structure](#index-and-data-file-structure)
+6. [Index and data files structure](#index-and-data-files-structure)
 7. [Memory management](#memory-management)
 
 
