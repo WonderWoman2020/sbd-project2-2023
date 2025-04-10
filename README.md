@@ -27,5 +27,35 @@ It is an educational project that aims to show how B-Tree indexing works and how
 
 ## How B-Tree and data is presented
 
-Work in progress, will be updated soon!
+**B-Tree index**
+
+Here is an example of how B-Tree structure is printed by the app:
+
+![BTree index](./docs/ui_ri.png)
+
+Each node takes up 1 line in the window. In this line is printed all the information needed about the node:
+- lvl - node's level in the tree. Level '0' is root and it increments down the tree. As it can be seen, levels are also marked by an indentation, for better readability of the B-Tree structure.
+- page - page number in the index file, on which the node is stored. Page number is location in the file, which can be calculated by page_number * page_size. Page_size depends on one of the input parameters and will be explained later.
+- node - node's number, which is just page_number + 1. It is shifted by one just to reserve '0' as a special value for node pointer, that means null pointer.
+- => - after the arrow, the contents of the node are described:
+    - H 2 H - between two letters 'H' there is a header of the node. Header contains pointer on the parent node. In this example, number 2 is the parent node number of one of the nodes.
+	- sequence of entries, e.g. |1| 5 1 |3| - one number between two '|' symbols is a child node pointer. Two numbers between child pointers create an entry - first is a key of some record stored in data file, and the second is a page, on which that record lies in the data file. About child pointers, if a pointer is on the left of an entry, that means it points to a child node, which contains only entries with smaller keys than this entry key. The same goes for the right child pointer, only it points to a child node containg only entries with bigger keys.
+	
+We can also print just the entries if we want:
+
+![BTree index](./docs/ui_re.png)
+	
+**Data file records**
+
+Now let's see how records from the data file are printed. We can:
+1. Just see all the records printed in order of their keys,
+2. Or explore data alignment of the data file and print raw byte data.
+
+1. Records printed in order of their keys:
+
+![Data file records](./docs/ui_ra.png)
+	
+2. Contents of the data file printed raw, as its data is aligned at the disk:
+
+![Data file contents](./docs/ui_rd.png)
 
