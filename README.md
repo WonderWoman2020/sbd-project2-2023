@@ -59,6 +59,12 @@ Records printed in order of their keys:
 
 ![Data file records](./docs/ui_ra.png)
 
+**IO operations statistics**
+
+At last, you can also see the reads and writes statistics after executing some commands on the database structure. You can also analyze B-Tree special operations counts, like `merge`, `split`, and `compensate` (summed up underflow and overflow compensations):
+
+![Statistics](./docs/ui_s.png)
+
 ## How to run
 
 The project is a standard Java project with only Lombok dependency added. You can run it in IntellijIdea and make use of existing `.idea` configurations or run it in your favourite IDE (although some additional startup configuration might be needed). To run in IntellijIdea, just open the `BTreeIndex` directory and press Shift + F10.
@@ -91,10 +97,6 @@ The parameter descriptions:
 - `Data file buffers number` - the index and data file are read in blocks, so only 'n' number of pages is loaded in memory at a time. Buffer equals one page. You can change the setting if you want to see how it will affect disk reads and writes statistics. This setting is for data file buffers number.
 - `Index file buffers number` - same as previous, just for index file buffers number.
 - `B-tree degree` - it is the most important parameter. The degree is the minimum number of entries that a node has to contain (except for root) to not be merged with some other underflown node. Maximum number of entries is degree * 2. This parameter dictates the size of the node - it also affects the page_size, as it is assumed in this app, that one node takes up exactly one disk page. You can calculate node size (and page size) with the formula: header_size + n * entry_size + (n+1) * child_pointer_size, where n = degree * 2 (sizes: header_size - 4 bytes, entry_size - 12 bytes, child_pointer_size - 4 bytes).
-
-At last, you can also see the reads and writes statistics after executing some commands on the database structure. You can also analyze B-Tree special operations counts, like `merge`, `split`, and `compensate` (summed up underflow and overflow compensations):
-
-![Statistics](./docs/ui_s.png)
 
 ## Index and data files structure
 
