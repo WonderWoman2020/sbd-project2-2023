@@ -69,7 +69,16 @@ Input commands are quite straightforward and are also described in the app menu 
 
 ![Input commands](./docs/ui_3.png)
 
-You can also generate or write a file containing a sequence of input commands, for faster testing :)
+You can also generate or write a file containing a sequence of input commands, for faster testing :) The file should be a `.txt` file and look like e.g.:
+
+```
+C 1 20 38
+C 27 10 29
+U 1 30 30
+D 27
+```
+
+Here are the options in menu to choose writing input in command line or providing self-written or generated input file:
 
 ![Input files option](./docs/ui_2.png)
 
