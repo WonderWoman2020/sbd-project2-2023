@@ -69,6 +69,12 @@ At last, you can also see the reads and writes statistics after executing some c
 
 The project is a standard Java project with only Lombok dependency added. You can run it in IntellijIdea and make use of existing `.idea` configurations or run it in your favourite IDE (although some additional startup configuration might be needed). To run in IntellijIdea, just open the `BTreeIndex` directory and press Shift + F10.
 
+You can also run the latest release of the app that can be accessed [here](./releases), which is in a form of a `.jar` file. You can run it on any operating system, that has JRE installed, with a command:
+
+```
+java -jar BTreeIndex.jar
+```
+
 ## Input commands and parameters
 
 Input commands are quite straightforward and are also described in the app menu itself:
