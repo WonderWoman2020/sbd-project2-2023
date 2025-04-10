@@ -4,7 +4,7 @@
 
 1. [Description](#description)
 2. [Who may find it useful](#who-may-find-it-useful)
-3. [How B-Tree and data is presented](#how-b---tree-and-data-is-presented)
+3. [How B-Tree and data is presented](#how-b-tree-and-data-is-presented)
 4. [How to run](#how-to-run)
 5. [Input commands and parameters](#input-commands-and-parameters)
 6. [Index and data files structure](#index-and-data-file-structure)
