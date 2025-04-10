@@ -78,7 +78,7 @@ U 1 30 30
 D 27
 ```
 
-Here are the options in menu to choose writing input in command line or providing self-written or generated input file:
+Here are the options in menu to choose writing input in command line or providing self-written or generated random commands input file:
 
 ![Input files option](./docs/ui_2.png)
 
